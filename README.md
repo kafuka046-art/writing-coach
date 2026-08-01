@@ -14,10 +14,18 @@
   - 检查：命令行输入 `node -v`，看到 v18.x 或更高即可
   - 没装去 https://nodejs.org 下载 LTS 版
 - **Chrome 或 Edge 浏览器**（语音输入和麦克风权限需要）
+- **没有 API Key 也能先体验**：未填 Key 时「入库」走内置预设讲解、「出库」走规则检查，功能完整可玩
 - **DeepSeek API Key**
   - 去 https://platform.deepseek.com/api_keys 申请（有免费额度）
 
 ## 启动步骤
+
+### 0. 一键启动（推荐，免命令行）
+
+- **Windows**：双击 `start.bat`（脚本会自动检查 Node.js、启动代理、打开浏览器）
+- **macOS / Linux**：终端运行 `./start.sh`
+
+也可以手动启动（见下方 1~4 步）。
 
 ### 1. 启动代理服务器
 
