@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作助手 · AI 知识库</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg-soft: #f7f7f4; --bg-card: #fbfbf8;
+    --border: #e4e2db; --border-strong: #d3d1c7;
+    --text: #2c2c2a; --text-mid: #5f5e5a; --text-light: #888780;
+    --blue: #185fa5; --blue-soft: #e6f1fb;
+    --green: #0f6e56; --green-soft: #e1f5ee;
+    --amber: #854f0b; --amber-soft: #faeeda;
+    --coral: #993c1d; --coral-soft: #faece7;
+    --purple: #534ab7; --purple-soft: #eeedfe;
+    --red-soft: #fcebeb; --red-border: #f7c1c1; --red: #a32d2d;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg-soft); color: var(--text); line-height: 1.6; font-size: 14px; padding: 20px; }
+  header { max-width: 1100px; margin: 0 auto 12px; padding: 14px 18px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+  header h1 { font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+  header p { font-size: 12px; color: var(--text-light); }
+  .settings-bar { max-width: 1100px; margin: 0 auto 12px; padding: 10px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .settings-bar input { padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 12px; }
+  .settings-bar button { font-size: 11px; padding: 5px 12px; }
+  .columns { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1.15fr; gap: 14px; }
+  .panel { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .panel h2 { font-size: 13px; font-weight: 500; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .panel h2 .tag { font-size: 11px; font-weight: 400; color: var(--text-light); margin-left: 6px; }
+  textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: 6px; padding: 9px; font-family: inherit; font-size: 13px; resize: vertical; background: var(--bg-card); }
+  textarea:focus { outline: none; border-color: var(--blue); }
+  .btn-row { margin: 8px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: var(--text); color: white; border: none; padding: 7px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  button:hover { opacity: 0.85; }
+  button.secondary { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border-strong); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .hint { font-size: 11px; color: var(--text-light); }
+  .q-hint { font-size: 11px; color: var(--text-light); margin: 4px 0 2px; }
+
+  .explain-box { margin-top: 8px; padding: 10px; background: var(--blue-soft); border: 1px solid #b5d4f4; border-radius: 6px; font-size: 12px; }
+  .explain-box.qa { background: var(--purple-soft); border: 1px solid #cecbf6; }
+  .explain-box.fix { background: var(--coral-soft); border: 1px solid #f5c4b3; }
+  .explain-box.master { background: var(--blue-soft); border: 1px solid #85b7eb; }
+  .explain-box.ai { background: #e1f5ee; border: 1px solid #5dcaa5; }
+  .explain-box .pat { font-weight: 500; color: var(--blue); margin-bottom: 3px; }
+  .explain-box.qa .pat { color: var(--purple); }
+  .explain-box.fix .pat { color: var(--coral); }
+  .explain-box.ai .pat { color: var(--green); }
+  .explain-box .row { font-size: 11px; color: var(--text-mid); margin-top: 2px; }
+  .explain-box .row b { color: var(--text); }
+
+  .target-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+  .target-row select { padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 12px; background: var(--bg); }
+  .filter-btns { display: flex; gap: 4px; margin-bottom: 6px; }
+  .filter-btns button { font-size: 10px; padding: 3px 8px; background: var(--bg-soft); color: var(--text-mid); border: 1px solid var(--border); }
+  .filter-btns button.active { background: var(--text); color: white; border-color: var(--text); }
+
+  .level-analysis { margin-bottom: 8px; padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; }
+  .level-analysis .la-title { font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .level-analysis .la-stats { color: var(--text-mid); margin-bottom: 4px; }
+  .level-analysis .la-stats b { color: var(--text); }
+  .level-analysis .la-advice { color: var(--amber); font-style: italic; }
+
+  .lib-list { margin-top: 6px; max-height: 220px; overflow-y: auto; }
+  .lib-item { padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; font-size: 11px; }
+  .lib-item.lp { border-left: 3px solid var(--purple); }
+  .lib-item.pat { border-left: 3px solid var(--green); }
+  .lib-item.fix { border-left: 3px solid var(--coral); }
+  .lib-item.master { border-left: 3px solid var(--blue); }
+  .lib-item.dim { opacity: 0.5; }
+  .lib-item .sent { color: var(--text); font-style: italic; margin-bottom: 3px; }
+  .lib-item .meta { color: var(--text-light); font-size: 10px; }
+  .lib-item .meta .pos { color: var(--green); }
+  .lib-item .meta .lp-tag { color: var(--purple); }
+  .lib-item .meta .fix-tag { color: var(--coral); }
+  .lib-item .meta .m-tag { color: var(--blue); }
+  .lib-item-q { background: var(--purple-soft); border-left: 3px solid var(--purple); padding: 5px 8px; margin-bottom: 5px; font-size: 11px; color: var(--purple); border-radius: 3px; line-height: 1.5; }
+.lib-item .del { float: right; color: var(--coral); cursor: pointer; font-size: 10px; }
+  .lib-empty { color: var(--text-light); font-size: 11px; padding: 10px; text-align: center; }
+  .lib-section { margin-top: 12px; }
+
+  .level-tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: 4px; font-weight: 500; }
+  .level-tag.l5 { background: #f1efe8; color: #5f5e5a; }
+  .level-tag.l6 { background: var(--blue-soft); color: var(--blue); }
+  .level-tag.l7 { background: var(--amber-soft); color: var(--amber); }
+
+  .preset-btns { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+  .preset-btns button { font-size: 10px; padding: 3px 8px; background: var(--bg-soft); color: var(--text-mid); border: 1px solid var(--border); }
+  .q-btns { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
+  .q-btns button { font-size: 10px; padding: 3px 8px; background: var(--purple-soft); color: var(--purple); border: 1px solid #cecbf6; }
+
+  .topic-area { margin-bottom: 8px; padding: 8px; border: 1px dashed var(--border-strong); border-radius: 6px; background: var(--bg-card); min-height: 44px; }
+  .topic-area .t-hint { text-align: center; color: var(--text-light); font-size: 11px; padding: 6px; }
+  .topic-images { display: flex; flex-wrap: wrap; gap: 6px; }
+  .img-wrap { position: relative; }
+  .img-wrap img { max-width: 160px; max-height: 120px; border: 1px solid var(--border); border-radius: 4px; display: block; }
+  .img-wrap .img-del { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; width: 16px; height: 16px; text-align: center; line-height: 16px; cursor: pointer; font-size: 10px; }
+
+  .check-result { margin-top: 8px; }
+  .result-section { font-size: 11px; font-weight: 500; color: var(--text-mid); margin: 8px 0 5px; padding-bottom: 3px; border-bottom: 1px solid var(--border); }
+  .result-item { padding: 8px; border-radius: 6px; margin-bottom: 6px; font-size: 11px; }
+  .result-item.good { background: var(--green-soft); border: 1px solid #9fe1cb; }
+  .result-item.fix { background: var(--amber-soft); border: 1px solid #fac775; }
+  .result-item.suggest { background: var(--coral-soft); border: 1px solid #f5c4b3; }
+  .result-item.grammar { background: var(--red-soft); border: 1px solid var(--red-border); }
+  .result-item .type { font-weight: 500; margin-bottom: 2px; }
+  .result-item.good .type { color: var(--green); }
+  .result-item.fix .type { color: var(--amber); }
+  .result-item.suggest .type { color: var(--coral); }
+  .result-item.grammar .type { color: var(--red); }
+  .result-item .desc { color: var(--text-mid); }
+  .result-item .ex { color: var(--text-light); font-style: italic; margin-top: 3px; font-size: 10px; }
+  .result-item .stored { font-size: 10px; margin-top: 3px; font-weight: 500; }
+  .result-item .stored.blue { color: var(--blue); }
+  .result-item .stored.red { color: var(--coral); }
+  .result-empty { color: var(--text-light); font-size: 11px; padding: 8px; text-align: center; }
+  .auto-add-note { font-size: 11px; color: var(--text); background: var(--bg-card); padding: 6px 10px; border-radius: 6px; margin-top: 6px; border: 1px solid var(--border); }
+  .auto-add-note b { color: var(--blue); }
+  .auto-add-note .red { color: var(--coral); }
+  .loading-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--text); color: white; padding: 14px 24px; border-radius: 8px; font-size: 13px; z-index: 999; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+.voice-control { max-width: 1100px; margin: 0 auto 12px; padding: 10px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.voice-control select { padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 12px; }
+.voice-btn { font-size: 12px; padding: 6px 14px; }
+.voice-btn.recording { background: var(--coral); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.textarea-wrap { position: relative; }
+.voice-mini-btn {
+  position: absolute; right: 6px; bottom: 6px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--bg-soft); border: 1px solid var(--border-strong);
+  font-size: 13px; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2; transition: all 0.15s;
+}
+.voice-mini-btn:hover { background: var(--blue-soft); border-color: #85b7eb; }
+.voice-mini-btn.recording { background: var(--coral); color: white; border-color: var(--coral); animation: pulse 1.5s infinite; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>写作助手 · AI 知识库（DeepSeek 驱动）</h1>
+  <p>填入 DeepSeek API Key 后：问为什么 → AI 针对你句子解释 · 写作检查 → AI 查语法+给建议 · 对错自动入库 · 标分过滤</p>
+</header>
+
+<div class="settings-bar">
+  <span style="font-size:12px;font-weight:500">DeepSeek API Key：</span>
+  <input type="password" id="apiKeyInput" placeholder="sk-...（填入后启用 AI）" style="width:240px">
+  <button onclick="saveApiKey()">保存</button>
+  <span id="apiStatus" class="hint">未设置（用预设规则）</span>
+  <span style="font-size:12px;margin-left:8px">语音：</span>
+  <select id="voiceLang" style="padding:3px 6px;border:1px solid var(--border-strong);border-radius:4px;font-size:11px">
+    <option value="zh-CN">中文</option>
+    <option value="en-US">English</option>
+  </select>
+  <span class="hint" style="margin-left:auto">模型：deepseek-v4-flash · <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--blue)">获取 Key</a></span>
+</div>
+
+<div class="columns">
+
+  <section class="panel">
+    <h2>入库 <span class="tag">主动请教（AI 解释）</span></h2>
+    <textarea id="learnInput" rows="2" placeholder="粘贴你不懂的句子，例如：I am interested in the surprising result."></textarea>
+    <div class="preset-btns">
+      <button onclick="fillPreset('over the period')">Over the period…</button>
+      <button onclick="fillPreset('it is evident that')">It is evident that…</button>
+      <button onclick="fillPreset('not only')">Not only…but also…</button>
+      <button onclick="fillPreset('despite the fact that')">Despite the fact that…</button>
+      <button onclick="fillPreset('which suggests that')">…which suggests that…</button>
+    </div>
+    <div class="q-hint">想问什么？（AI 会针对你的句子解释；留空则按句式识别）</div>
+    <textarea id="questionInput" rows="2" placeholder="例如：为什么用 interested 不用 interesting？为什么形容词是这个顺序？"></textarea>
+    <div class="q-btns">
+      <button onclick="fillQuestion('ed/ing')">为什么 ed/ing？</button>
+      <button onclick="fillQuestion('顺序')">形容词顺序？</button>
+      <button onclick="fillQuestion('副词')">副词位置？</button>
+      <button onclick="fillQuestion('时态')">为什么这个时态？</button>
+      <button onclick="fillQuestion('介词')">为什么这个介词？</button>
+      <button onclick="fillQuestion('冠词')">为什么这个冠词？</button>
+    </div>
+    <div class="btn-row">
+      <button id="learnBtn" onclick="learn()">解释并入库</button>
+      <button class="secondary" onclick="clearLearn()">清空</button>
+    </div>
+    <div id="explainResult"></div>
+
+    <div class="lib-section">
+      <h2>我的知识库 <span class="tag" id="libCount"></span></h2>
+      <div class="target-row">
+        目标分数：
+        <select id="targetScore" onchange="onTargetChange()">
+          <option value="5.5">5.5</option>
+          <option value="6.0">6.0</option>
+          <option value="6.5" selected>6.5</option>
+          <option value="7.0">7.0</option>
+          <option value="7.5">7.5</option>
+        </select>
+        <span class="hint" style="margin-left:4px">推荐自动过滤低分表达</span>
+      </div>
+      <div class="filter-btns">
+        <button id="fAll" class="active" onclick="setFilter('all')">全部</button>
+        <button id="fTarget" onclick="setFilter('target')">目标以上</button>
+        <button id="fHigh" onclick="setFilter('high')">仅高级(7分)</button>
+      </div>
+      <div style="margin-bottom:8px;display:flex;gap:4px;align-items:center">
+        <button class="secondary" onclick="exportLib()" style="font-size:10px;padding:3px 8px">导出库</button>
+        <button class="secondary" onclick="document.getElementById('importFile').click()" style="font-size:10px;padding:3px 8px">导入库</button>
+        <button class="secondary" onclick="clearLib()" style="font-size:10px;padding:3px 8px">清空库</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importLib(event)">
+      </div>
+      <div id="levelAnalysis"></div>
+      <div id="libraryList" class="lib-list"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>出库 <span class="tag">写作 → AI 检查 + 自动入库</span></h2>
+    <div class="topic-area" id="topicArea">
+      <div class="t-hint" id="topicHint">题目图片：Ctrl+V 粘贴，或 <a href="#" onclick="uploadImg();return false;" style="color:var(--blue)">上传图片</a></div>
+      <div class="topic-images" id="topicImages"></div>
+    </div>
+    <textarea id="essayInput" rows="9" placeholder="写作文。AI 检查语法+表达，用对入库「已掌握」，用错入库「纠错」。"></textarea>
+    <div class="btn-row">
+      <button id="checkBtn" onclick="check()">检查并自动入库</button>
+      <button class="secondary" onclick="loadSampleEssay()">填示例作文</button>
+      <button class="secondary" onclick="clearEssay()">清空</button>
+    </div>
+    <div id="checkResult" class="check-result"></div>
+  </section>
+
+</div>
+
+<script>
+var LEVEL_SCORE = { "5分": "基础表达·对应雅思5分", "6分": "能复杂句·对应6分", "7分": "多种复杂结构·对应7分" };
+function levelNum(lv) { return lv === "7分" ? 7 : (lv === "6分" ? 6 : 5); }
+function levelTagClass(lv) { return lv === "7分" ? "l7" : (lv === "6分" ? "l6" : "l5"); }
+
+var PRESETS = [
+  { pattern: "over the period", regex: /over the period/i, grammar: "介词短语作时间状语", position: "句首", example: "Over the period, the sales doubled.", note: "只能放句首", level: "6分" },
+  { pattern: "it is evident that", regex: /it is evident that/i, grammar: "形式主语结构，显客观", position: "句首", example: "It is evident that the new policy worked.", note: "段尾下结论", level: "6分" },
+  { pattern: "not only ... but also", regex: /not only[\s\S]{1,80}?but also/i, grammar: "并列结构；句首倒装", position: "句中或句首", example: "Not only did sales rise, but also costs fell.", note: "句首倒装是7分用法", level: "7分" },
+  { pattern: "despite the fact that", regex: /despite the fact that/i, grammar: "让步状语从句，比 although 正式", position: "句首或句中", example: "Despite the fact that it rained, the match continued.", note: "书面语", level: "6分" },
+  { pattern: "which suggests that", regex: /which suggests that/i, grammar: "非限定性定语从句，引出推论", position: "句中", example: "Sales rose, which suggests that the policy worked.", note: "which 前要有逗号", level: "6分" }
+];
+
+var QA_PRESETS = [
+  { keys: ["ed", "ing", "interested", "interesting", "bored", "boring"], title: "-ed / -ing 形容词", answer: "-ed 描述人的感受；-ing 描述事物性质。", example: "I am bored. / The movie is boring.", level: "5分" },
+  { keys: ["顺序", "排序", "order", "形容词"], title: "形容词排序 (OSASCOMP)", answer: "Opinion→Size→Age→Shape→Colour→Origin→Material→Purpose。", example: "a lovely small old red Chinese wooden desk", level: "6分" },
+  { keys: ["副词", "adverb", "位置", "放"], title: "副词的位置", answer: "频度副词 be 后实义动词前；方式副词动词后。", example: "She always comes early.", level: "5分" },
+  { keys: ["时态", "过去", "完成", "现在", "tense"], title: "时态选择", answer: "过去时表过去；现在完成时表对现在有影响。", example: "I lived there. / I have lived there for 3 years.", level: "5分" },
+  { keys: ["介词", "preposition", "in", "on", "at"], title: "介词搭配", answer: "时间 at+时刻/on+日期/in+月年。", example: "at 8 / on Monday / in May", level: "5分" },
+  { keys: ["冠词", "article", "a", "an", "the"], title: "冠词用法", answer: "a/an 首次提及泛指；the 特指。", example: "I saw a dog. The dog was barking.", level: "5分" },
+  { keys: ["定语从句", "that和which", "限定性", "非限定"], title: "that / which 定语从句", answer: "限定性从句 that/which 都行；非限定性只能 which。", example: "The book that I read...", level: "6分" },
+  { keys: ["被动", "被动语态", "passive"], title: "被动语态", answer: "be + 过去分词，强调承受者。", example: "The bridge was built in 1990.", level: "6分" },
+  { keys: ["虚拟", "虚拟语气", "subjunctive", "would have"], title: "虚拟语气", answer: "表假设。If I were you, I would...", example: "If I were you, I would go.", level: "7分" },
+  { keys: ["倒装", "inversion", "never have", "hardly"], title: "倒装句", answer: "否定词或 Only+状语放句首，主句部分倒装。", example: "Never have I seen such a thing.", level: "7分" },
+  { keys: ["强调句", "emphatic", "it is that"], title: "强调句", answer: "It is/was + 被强调部分 + that/who。", example: "It was John who broke the window.", level: "7分" },
+  { keys: ["比较级", "最高级", "taller than"], title: "比较级与最高级", answer: "比较级 than；修饰比较级用 much/a lot。", example: "much taller", level: "5分" }
+];
+
+var library = [];
+var topicImages = [];
+var targetScore = 6.5;
+var filterMode = "all";
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function hasApiKey() { return !!localStorage.getItem("dsApiKey"); }
+function saveApiKey() {
+  var key = document.getElementById("apiKeyInput").value.trim();
+  if (key) localStorage.setItem("dsApiKey", key); else localStorage.removeItem("dsApiKey");
+  updateApiStatus();
+}
+function updateApiStatus() {
+  var s = document.getElementById("apiStatus");
+  if (hasApiKey()) s.innerHTML = '<span style="color:var(--green);font-weight:500">已启用 AI 解释</span>';
+  else s.textContent = "未设置（用预设规则）";
+}
+function showLoading(msg) {
+  var old = document.getElementById("loadingOverlay");
+  if (old) old.remove();
+  var div = document.createElement("div");
+  div.id = "loadingOverlay";
+  div.className = "loading-overlay";
+  div.textContent = msg || "AI 思考中...";
+  document.body.appendChild(div);
+}
+function hideLoading() { var d = document.getElementById("loadingOverlay"); if (d) d.remove(); }
+
+async function callLLM(userPrompt, systemPrompt) {
+  var key = localStorage.getItem("dsApiKey");
+  if (!key) return null;
+  try {
+    var resp = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+      body: JSON.stringify({
+        model: "deepseek-v4-flash",
+        messages: [
+          { role: "system", content: systemPrompt || "你是英语写作教练，用中文回答，简洁清晰。" },
+          { role: "user", content: userPrompt }
+        ],
+        stream: false
+      })
+    });
+    if (!resp.ok) { var err = await resp.text(); return "ERROR: " + resp.status + " " + err.slice(0,200); }
+    var data = await resp.json();
+    return data.choices[0].message.content;
+  } catch(e) {
+    if (e.message && e.message.indexOf("Failed to fetch") >= 0) {
+      return "ERROR: 需要本地代理。请运行 proxy-server.js（node proxy-server.js），然后通过 http://localhost:8768/ 访问 demo（不要直接打开文件或用其他服务器）。";
+    }
+    return "ERROR: " + e.message;
+  }
+}
+
+var voiceRec = null;
+function setupVoiceButtons() {
+  document.querySelectorAll("textarea").forEach(function(t) {
+    var wrap = document.createElement("div");
+    wrap.className = "textarea-wrap";
+    t.parentNode.insertBefore(wrap, t);
+    wrap.appendChild(t);
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "voice-mini-btn";
+    btn.innerHTML = "🎤";
+    btn.title = "语音输入";
+    btn.onclick = function(e) { e.preventDefault(); t.focus(); toggleVoice(t); };
+    wrap.appendChild(btn);
+  });
+}
+async function toggleVoice(target) {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert("浏览器不支持语音输入，请用 Chrome 或 Edge"); return; }
+  var btn = target ? target.parentNode.querySelector(".voice-mini-btn") : null;
+  if (!btn) return;
+  if (voiceRec) {
+    voiceRec.stop();
+    voiceRec = null;
+    btn.innerHTML = "🎤";
+    btn.className = "voice-mini-btn";
+    return;
+  }
+  if (location.protocol === "file:") {
+    alert("当前是 file:// 协议打开的，麦克风权限受限会导致语音秒关。\n\n请用 localhost 访问：\n1. 我帮你起了本地服务器\n2. 浏览器打开 http://localhost:8766/writing-coach-demo.html\n3. 再点语音按钮，会弹麦克风权限请求，点允许");
+    return;
+  }
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(function(t) { t.stop(); });
+  } catch(err) {
+    alert("麦克风权限被拒或不可用：" + err.message + "\n\n请点地址栏左侧🔒/⚙，允许麦克风权限后重试。");
+    return;
+  }
+  voiceRec = new SR();
+  voiceRec.lang = document.getElementById("voiceLang").value;
+  voiceRec.continuous = true;
+  voiceRec.interimResults = false;
+  btn.innerHTML = "⏹";
+  btn.className = "voice-mini-btn recording";
+  var gotResult = false;
+  voiceRec.onresult = function(e) {
+    gotResult = true;
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      var text = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        target.value += (target.value && target.value.length > 0 && !/[\s\n]$/.test(target.value) ? " " : "") + text;
+      }
+    }
+    target.focus();
+  };
+  voiceRec.onerror = function(e) {
+    var msg = e.error;
+    if (e.error === "network") msg = "网络错误：Chrome 语音识别需访问 Google 服务，确认科学上网生效";
+    else if (e.error === "not-allowed") msg = "麦克风权限被拒";
+    else if (e.error === "no-speech") msg = "没检测到语音，请大声点或靠近麦克风再说一次";
+    alert("语音错误：" + msg);
+  };
+  voiceRec.onend = function() {
+    voiceRec = null;
+    btn.innerHTML = "🎤";
+    btn.className = "voice-mini-btn";
+    if (!gotResult) btn.title = "语音输入（上次没听到，检查麦克风/网络/权限）";
+  };
+  try { voiceRec.start(); btn.title = "录音中...现在说话"; }
+  catch(err) { alert("启动失败：" + err.message); btn.innerHTML = "🎤"; btn.className = "voice-mini-btn"; voiceRec = null; }
+}
+
+function loadLib() {
+  try { var raw = localStorage.getItem("writingCoachLib4"); library = raw ? JSON.parse(raw) : []; } catch(e) { library = []; }
+  if (library.length === 0) {
+    library = [
+      { id: uid(), sentence: "Over the period, the trend showed a significant increase.", pattern: "over the period", grammar: "介词短语作时间状语", position: "句首", example: "Over the period, sales doubled.", note: "放句首最自然", source: "预置范文", createdAt: Date.now(), type: "句式", question: "", level: "6分" },
+      { id: uid(), sentence: "It is evident that the policy had a profound impact.", pattern: "it is evident that", grammar: "形式主语，引出判断", position: "句首", example: "It is evident that the new policy worked.", note: "用于下结论", source: "预置范文", createdAt: Date.now(), type: "句式", question: "", level: "6分" }
+    ];
+    saveLib();
+  }
+  try { var t = localStorage.getItem("writingCoachTarget"); if (t) targetScore = parseFloat(t); } catch(e) {}
+}
+function saveLib() { localStorage.setItem("writingCoachLib4", JSON.stringify(library)); }
+function saveTarget() { localStorage.setItem("writingCoachTarget", targetScore.toString()); }
+
+function onTargetChange() { targetScore = parseFloat(document.getElementById("targetScore").value); saveTarget(); renderLib(); }
+function setFilter(mode) {
+  filterMode = mode;
+  document.getElementById("fAll").className = mode === "all" ? "active" : "";
+  document.getElementById("fTarget").className = mode === "target" ? "active" : "";
+  document.getElementById("fHigh").className = mode === "high" ? "active" : "";
+  renderLib();
+}
+function minLevelForTarget() { return Math.floor(targetScore - 0.5); }
+
+function fillPreset(p) {
+  var examples = {
+    "over the period": "Over the period, the trend reversed dramatically.",
+    "it is evident that": "It is evident that urbanization brings both opportunities and challenges.",
+    "not only": "Not only did the population grow, but also the economy expanded.",
+    "despite the fact that": "Despite the fact that the cost was high, the project was completed.",
+    "which suggests that": "The data improved, which suggests that the reform was effective."
+  };
+  document.getElementById("learnInput").value = examples[p] || "";
+}
+function fillQuestion(t) {
+  var examples = {
+    "ed/ing": "为什么这里用 interested 不用 interesting？",
+    "顺序": "为什么形容词是 a small red car 这个顺序？",
+    "副词": "为什么副词 always 放在这个位置？",
+    "时态": "为什么这里用过去时不用现在完成时？",
+    "介词": "为什么用 in 不用 on？",
+    "冠词": "为什么这里用 a 不用 the？"
+  };
+  document.getElementById("questionInput").value = examples[t] || "";
+}
+
+function matchQA(q) {
+  var ql = q.toLowerCase();
+  for (var i = 0; i < QA_PRESETS.length; i++) {
+    var qa = QA_PRESETS[i];
+    for (var j = 0; j < qa.keys.length; j++) {
+      if (ql.indexOf(qa.keys[j].toLowerCase()) !== -1) return qa;
+    }
+  }
+  return null;
+}
+
+async function learn() {
+  var sentence = document.getElementById("learnInput").value.trim();
+  var question = document.getElementById("questionInput").value.trim();
+  if (!sentence && !question) { alert("贴个句子或提个问题"); return; }
+  var btn = document.getElementById("learnBtn");
+  btn.disabled = true;
+  var entry;
+
+  if (question) {
+    if (hasApiKey()) {
+      showLoading("AI 针对你的句子解释中...");
+      var prompt = "你是英语写作教练。学生给了一个英语句子和一个具体问题。请给出**详细、结构化、教学性强**的回答。\n\n## 必须按以下结构回答：\n\n### 1. 核心规则\n用一句话概括回答这个问题的核心规则。\n\n### 2. 原句\n列出学生给的句子。\n\n### 3. 原理拆解\n- **结构公式**（用公式表示，如 \"Not only + 倒装语序, but (also) + 正常语序\"）\n- **逐点详细解释**：每个点用 **粗体** 标关键词，解释为什么，**必须直接引用学生句子里具体的词**\n\n### 4. 复原正常语序\n（如果涉及倒装/语序变化）把特殊语序还原成正常语序，方括号注明原成分移到了哪里，方便学生理解。\n\n### 5. 常见混淆情况（重点区分！）\n举 **2 种** 容易混淆的情况，对比清楚：\n- 情况 A：✅ 正确例句 + 为什么对\n- 情况 B：❌ 错误例句 + 错在哪\n\n### 6. 补充语法细节\n其他相关的、值得记住的细节（其他词的位置规则、正式程度、其他用法等）。\n\n### 7. 仿写同类例句（直接背诵）\n给 2-3 个学生可以直接背的同类结构例句。\n\n### 8. 一句话总结记忆\n用最精简的 **粗体** 一句话总结核心规则，方便背诵。\n\n## 要求：\n- **必须直接引用学生句子里具体的词**解释，不要泛泛而谈或只甩通用规则\n- 如果学生问的点在这个句子里不涉及，或问题有歧义（如\"为什么后面不倒装\"的\"后面\"指什么），**先明确指出**\n- 用中文，关键语法术语用英文\n- 用 markdown 格式（**粗体**、✅、❌、- 列表、> 等）\n- 教学性强，看完能真正理解并会用\n- 最后另起一行写：等级：X分（5分=基础，6分=能复杂句，7分=多种复杂结构）\n\n---\n学生句子：" + (sentence || "(无)") + "\n学生问题：" + question;
+      var llmAnswer = await callLLM(prompt, "你是英语写作教练，针对用户具体句子精细解释语法。用中文，结构化，必须引用句子里的具体词，教学性强。");
+      hideLoading();
+      if (llmAnswer && llmAnswer.indexOf("ERROR") !== 0) {
+        var levelMatch = llmAnswer.match(/等级[:：]\s*(\d)分/);
+        var lv = levelMatch ? (levelMatch[1] + "分") : "6分";
+        entry = { id: uid(), sentence: sentence || "(只提问)", pattern: "AI：" + question.slice(0,18), grammar: llmAnswer, position: "-", example: "", note: "你问的：" + question, source: "AI解释", createdAt: Date.now(), type: "语言点", question: question, level: lv };
+        library.push(entry);
+        saveLib();
+        renderLib();
+        renderExplain(entry);
+        document.getElementById("learnInput").value = "";
+        document.getElementById("questionInput").value = "";
+        btn.disabled = false;
+        return;
+      }
+      // LLM 失败且有 key：明确报错入库，不要 fallback 到误导预设
+      entry = { id: uid(), sentence: sentence || "(只提问)", pattern: "AI 调用失败", grammar: "AI 调用失败：" + (llmAnswer || "未知错误") + "\n\n请检查：\n1. 是否通过 http://localhost:8768/ 访问（proxy-server.js 在跑）\n2. DeepSeek API Key 是否正确\n3. 网络/科学上网是否通畅", position: "-", example: "", note: "你问的：" + question, source: "AI失败", createdAt: Date.now(), type: "语言点", question: question, level: "6分" };
+      library.push(entry);
+      saveLib();
+      renderLib();
+      renderExplain(entry);
+      document.getElementById("learnInput").value = "";
+      document.getElementById("questionInput").value = "";
+      btn.disabled = false;
+      return;
+    }
+    var qa = matchQA(question);
+    if (qa) {
+      entry = { id: uid(), sentence: sentence || "(只提问)", pattern: qa.title, grammar: qa.answer, position: "-", example: qa.example, note: "你问的：" + question, source: hasApiKey()?"AI失败·预设":"预设", createdAt: Date.now(), type: "语言点", question: question, level: qa.level };
+    } else {
+      entry = { id: uid(), sentence: sentence || "(只提问)", pattern: "自由提问", grammar: hasApiKey() ? ("AI调用失败：" + (llmAnswer||"")) : "(未设API Key，预设未覆盖。设Key后AI能答任意问题)", position: "-", example: "", note: "你问的：" + question, source: "预设", createdAt: Date.now(), type: "语言点", question: question, level: "6分" };
+    }
+  } else {
+    if (hasApiKey() && sentence) {
+      showLoading("AI 宏观结构解释中...");
+      var macroPrompt = "句子：" + sentence + "\n\n请从宏观角度解释这个句子的整体结构：\n1) 句型：简单句/复合句/并列句/倒装句等\n2) 主干：主语/谓语/宾语是什么\n3) 结构组织：有哪些从句/修饰成分，它们怎么咬合\n4) 表达作用：这种结构在写作中起什么作用（强调？客观？让步？递进？下结论？）\n5) 仿写骨架：抽出一个可套用的结构模板\n6) 最后另起一行写：等级：X分（5分=基础，6分=能复杂句，7分=多种复杂结构）\n用中文，结构化。";
+      var macroAnswer = await callLLM(macroPrompt, "你是英语写作教练，从宏观角度解释句子整体结构。用中文，结构化。");
+      hideLoading();
+      if (macroAnswer && macroAnswer.indexOf("ERROR") !== 0) {
+        var levelMatch2 = macroAnswer.match(/等级[:：]\s*(\d)分/);
+        var lv2 = levelMatch2 ? (levelMatch2[1] + "分") : "6分";
+        entry = { id: uid(), sentence: sentence, pattern: "AI宏观：" + sentence.slice(0,18), grammar: macroAnswer, position: "-", example: "", note: "宏观结构解释（无具体问题）", source: "AI解释", createdAt: Date.now(), type: "语言点", question: "", level: lv2 };
+        library.push(entry);
+        saveLib();
+        renderLib();
+        renderExplain(entry);
+        document.getElementById("learnInput").value = "";
+        btn.disabled = false;
+        return;
+      }
+    }
+    var matched = null;
+    for (var i = 0; i < PRESETS.length; i++) { if (PRESETS[i].regex.test(sentence)) { matched = PRESETS[i]; break; } }
+    if (matched) {
+      entry = { id: uid(), sentence: sentence, pattern: matched.pattern, grammar: matched.grammar, position: matched.position, example: matched.example, note: matched.note, source: "你入库的", createdAt: Date.now(), type: "句式", question: "", level: matched.level };
+    } else {
+      var short = sentence.length > 30 ? sentence.slice(0,30) + "..." : sentence;
+      entry = { id: uid(), sentence: sentence, pattern: short, grammar: "(自定义句式)", position: "待确认", example: sentence, note: "手动入库", source: "你入库的", createdAt: Date.now(), type: "句式", question: "", level: "6分" };
+    }
+  }
+  library.push(entry);
+  saveLib();
+  renderLib();
+  renderExplain(entry);
+  document.getElementById("learnInput").value = "";
+  document.getElementById("questionInput").value = "";
+  btn.disabled = false;
+}
+
+function renderExplain(entry) {
+  var box = document.getElementById("explainResult");
+  var cls = "explain-box";
+  var label = "句式";
+  if (entry.type === "语言点") { cls = entry.source === "AI解释" ? "explain-box ai" : "explain-box qa"; label = entry.source === "AI解释" ? "AI 解释" : "语言点"; }
+  if (entry.type === "纠错") { cls = "explain-box fix"; label = "纠错"; }
+  if (entry.type === "已掌握") { cls = "explain-box master"; label = "已掌握"; }
+  var html = '<div class="' + cls + '">';
+  html += '<div class="pat">已入库 · ' + label + "：" + entry.pattern + ' <span class="level-tag ' + levelTagClass(entry.level) + '">' + entry.level + "</span></div>";
+  html += '<div class="row"><b>原句：</b>' + entry.sentence + "</div>";
+  html += '<div class="row" style="white-space:pre-wrap"><b>解释：</b>' + entry.grammar + "</div>";
+  if (entry.example) html += '<div class="row"><b>例句：</b>' + entry.example + "</div>";
+  if (entry.note) html += '<div class="row"><b>备注：</b>' + entry.note + "</div>";
+  html += "</div>";
+  box.innerHTML = html;
+}
+
+function renderLevelAnalysis() {
+  var mastered = library.filter(function(x){ return x.type === "已掌握" || x.type === "句式"; });
+  var l5 = mastered.filter(function(x){return x.level==="5分";}).length;
+  var l6 = mastered.filter(function(x){return x.level==="6分";}).length;
+  var l7 = mastered.filter(function(x){return x.level==="7分";}).length;
+  var total = l5 + l6 + l7;
+  var fixCnt = library.filter(function(x){return x.type==="纠错";}).length;
+  var minLv = minLevelForTarget();
+  var advice;
+  if (total === 0) advice = "库还空，入库或写篇作文";
+  else if (minLv >= 7 && l7 === 0) advice = "目标" + targetScore + "+，还没有7分表达，优先学倒装/强调句/虚拟";
+  else if (minLv >= 6 && l6 + l7 < 2) advice = "目标" + targetScore + "+，多学6-7分句式（定语从句/被动/形式主语/倒装）";
+  else if (l7 === 0) advice = "已掌握基础和进阶，挑战7分句式冲7+";
+  else advice = "结构均衡，写作时多用已掌握的高分表达";
+  var html = '<div class="level-analysis">';
+  html += '<div class="la-title">水平分析 · 已掌握 ' + total + ' 个（纠错 ' + fixCnt + ' 条）· 目标 ' + targetScore + '+</div>';
+  html += '<div class="la-stats">5分 <b>' + l5 + '</b> · 6分 <b>' + l6 + '</b> · 7分 <b>' + l7 + '</b>　|　推荐过滤：' + minLv + '分以下不推</div>';
+  html += '<div class="la-advice">建议：' + advice + "</div>";
+  html += '</div>';
+  document.getElementById("levelAnalysis").innerHTML = html;
+}
+
+function renderLib() {
+  renderLevelAnalysis();
+  var list = document.getElementById("libraryList");
+  var cnt = library.length;
+  var pCnt = library.filter(function(x){return x.type==="句式";}).length;
+  var lCnt = library.filter(function(x){return x.type==="语言点";}).length;
+  var fCnt = library.filter(function(x){return x.type==="纠错";}).length;
+  var mCnt = library.filter(function(x){return x.type==="已掌握";}).length;
+  document.getElementById("libCount").textContent = "共 " + cnt + " 条（句式" + pCnt + " · 语言点" + lCnt + " · 已掌握" + mCnt + " · 纠错" + fCnt + "）";
+  if (cnt === 0) { list.innerHTML = '<div class="lib-empty">库还空着，入库或写篇作文触发自动入库</div>'; return; }
+  var minLv = minLevelForTarget();
+  list.innerHTML = library.slice().reverse().map(function(item) {
+    var cls = "lib-item pat";
+    var tag = '位置：<span class="pos">' + item.position + "</span>";
+    if (item.type === "语言点") { cls = item.source === "AI解释" ? "lib-item lp" : "lib-item lp"; tag = '<span class="lp-tag">语言点</span>'; }
+    else if (item.type === "纠错") { cls = "lib-item fix"; tag = '<span class="fix-tag">纠错</span>'; }
+    else if (item.type === "已掌握") { cls = "lib-item master"; tag = '<span class="m-tag">已掌握</span>'; }
+    var lv = item.level || "6分";
+    var dim = "";
+    if (filterMode === "target" && levelNum(lv) < minLv) dim = " dim";
+    if (filterMode === "high" && levelNum(lv) < 7) dim = " dim";
+    var qHtml = item.question ? '<div class="lib-item-q">💬 你的问题：' + item.question + "</div>" : "";
+    return '<div class="' + cls + dim + '">' +
+      '<span class="del" onclick="delItem(\'' + item.id + '\')">删除</span>' +
+      qHtml +
+      '<div class="sent">"' + (item.sentence || "(无)") + '"</div>' +
+      '<div class="meta"><b>' + item.pattern + '</b> <span class="level-tag ' + levelTagClass(lv) + '">' + lv + "</span>　|　" + tag + "　|　" + item.source + "</div>" +
+    "</div>";
+  }).join("");
+}
+
+function delItem(id) { library = library.filter(function(x){return x.id !== id;}); saveLib(); renderLib(); }
+function clearLearn() { document.getElementById("learnInput").value = ""; document.getElementById("questionInput").value = ""; document.getElementById("explainResult").innerHTML = ""; }
+function clearEssay() { document.getElementById("essayInput").value = ""; document.getElementById("checkResult").innerHTML = ""; }
+
+function exportLib() {
+  var data = JSON.stringify(library, null, 2);
+  var blob = new Blob([data], {type: "application/json"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = "writing-coach-library.json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importLib(e) {
+  var file = e.target.files[0]; if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try { var data = JSON.parse(ev.target.result); if (Array.isArray(data)) { library = data; saveLib(); renderLib(); alert("导入成功，共 " + library.length + " 条"); } else { alert("文件格式不对"); } } catch(err) { alert("导入失败：" + err.message); }
+  };
+  reader.readAsText(file); e.target.value = "";
+}
+function clearLib() { if (!confirm("确定清空知识库？建议先导出备份")) return; library = []; saveLib(); renderLib(); }
+
+function loadSampleEssay() {
+  document.getElementById("essayInput").value = "The chart shows the changes in urban population from 2000 to 2020. It is evident that the population grew steadily. Not only did the urban population increase, but also the rural population declined. The trend reversed in 2010, over the period the number decreased slightly. This change reflects policy adjustments";
+}
+
+function uploadImg() {
+  var input = document.createElement("input");
+  input.type = "file"; input.accept = "image/*";
+  input.onchange = function(e) { var file = e.target.files[0]; if (!file) return; var reader = new FileReader(); reader.onload = function(ev) { addTopicImage(ev.target.result); }; reader.readAsDataURL(file); };
+  input.click();
+}
+function addTopicImage(dataUrl) { topicImages.push(dataUrl); renderTopicImages(); }
+function renderTopicImages() {
+  var box = document.getElementById("topicImages");
+  var hint = document.getElementById("topicHint");
+  if (topicImages.length === 0) { hint.style.display = "block"; box.innerHTML = ""; return; }
+  hint.style.display = "none";
+  box.innerHTML = topicImages.map(function(src, i) { return '<div class="img-wrap"><img src="' + src + '"><div class="img-del" onclick="delTopicImage(' + i + ')">×</div></div>'; }).join("");
+}
+function delTopicImage(i) { topicImages.splice(i, 1); renderTopicImages(); }
+
+document.addEventListener("paste", function(e) {
+  var items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  var hasImage = false;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (it.type && it.type.indexOf("image/") === 0) {
+      hasImage = true;
+      var blob = it.getAsFile();
+      if (!blob) continue;
+      var reader = new FileReader();
+      reader.onload = function(ev) { addTopicImage(ev.target.result); };
+      reader.readAsDataURL(blob);
+    }
+  }
+  if (hasImage) e.preventDefault();
+});
+
+function checkGrammarRules(essay) {
+  var issues = [];
+  var trimmed = essay.trim();
+  if (!trimmed) return issues;
+  var sents = trimmed.split(/[.!?]+/).map(function(s){return s.trim();}).filter(function(s){return s.length > 0;});
+  for (var i = 0; i < sents.length; i++) {
+    var s = sents[i];
+    if (/^[a-z]/.test(s)) { var preview = s.length > 25 ? s.slice(0,25) + "..." : s; issues.push({ title: "句首大写", desc: "开头应大写：\"" + preview + "\"", fix: "首字母大写", level: "5分" }); }
+  }
+  var rep = essay.match(/\b(\w+)\s+\1\b/i);
+  if (rep) issues.push({ title: "重复词", desc: "重复：" + rep[0], fix: "删掉一个", level: "5分" });
+  if (/ {2,}/.test(essay)) issues.push({ title: "多余空格", desc: "有连续空格", fix: "只留一个", level: "5分" });
+  if (!/[.!?]$/.test(trimmed)) issues.push({ title: "句末标点", desc: "结尾缺标点", fix: "加标点", level: "5分" });
+  return issues;
+}
+
+function autoStoreFromCheck(grammarIssues, fixItems, goodItems) {
+  var addedFix = 0, addedMaster = 0;
+  for (var g of grammarIssues) {
+    var exists = library.some(function(x){ return x.type === "纠错" && x.pattern === g.title; });
+    if (!exists) { library.push({ id: uid(), sentence: g.sent || "(写作中)", pattern: g.title, grammar: g.fix, position: "-", example: g.desc, note: "写作纠错自动入库", source: "写作纠错", createdAt: Date.now(), type: "纠错", question: "", level: g.level || "5分" }); addedFix++; }
+  }
+  for (var f of fixItems) {
+    var exists2 = library.some(function(x){ return x.type === "纠错" && x.pattern === ("句式位置：" + f.item.pattern); });
+    if (!exists2) { library.push({ id: uid(), sentence: f.item.sentence || "(写作中)", pattern: "句式位置：" + f.item.pattern, grammar: f.item.example, position: f.item.position, example: f.desc, note: "位置错，应放" + f.item.position, source: "写作纠错", createdAt: Date.now(), type: "纠错", question: "", level: f.item.level || "6分" }); addedFix++; }
+  }
+  for (var gd of goodItems) {
+    var exists3 = library.some(function(x){ return x.type === "已掌握" && x.pattern === gd.item.pattern; });
+    if (!exists3) { library.push({ id: uid(), sentence: gd.item.sentence || "(写作中)", pattern: gd.item.pattern, grammar: gd.item.grammar, position: gd.item.position, example: gd.item.example, note: "作文中用对，自动入库", source: "写作已掌握", createdAt: Date.now(), type: "已掌握", question: "", level: gd.item.level || "6分" }); addedMaster++; }
+  }
+  if (addedFix + addedMaster > 0) { saveLib(); renderLib(); }
+  return { fix: addedFix, master: addedMaster };
+}
+
+async function check() {
+  var essay = document.getElementById("essayInput").value.trim();
+  var resultBox = document.getElementById("checkResult");
+  if (!essay) { resultBox.innerHTML = '<div class="result-empty">先写点作文再检查</div>'; return; }
+  var btn = document.getElementById("checkBtn");
+  btn.disabled = true;
+
+  var grammarIssues;
+  var aiGrammarNote = "";
+
+  if (hasApiKey()) {
+    showLoading("AI 检查语法和表达中...");
+    var prompt = "检查这篇英语作文的语法和表达问题。返回JSON数组，每个元素：{\"title\":\"问题类型\",\"desc\":\"具体描述（引用作文里的词）\",\"fix\":\"修正建议\",\"level\":\"5分或6分或7分\"}。只返回JSON数组，不要其他文字。\n\n作文：\n" + essay;
+    var llmResult = await callLLM(prompt, "你是英语写作教练，检查作文语法。只返回JSON数组。");
+    hideLoading();
+    if (llmResult && llmResult.indexOf("ERROR") !== 0) {
+      try {
+        var cleaned = llmResult.replace(/```json|```/g, "").trim();
+        grammarIssues = JSON.parse(cleaned);
+        aiGrammarNote = "（AI 检查）";
+      } catch(e) { grammarIssues = checkGrammarRules(essay); aiGrammarNote = "（AI返回解析失败，用规则）"; }
+    } else { grammarIssues = checkGrammarRules(essay); aiGrammarNote = "（AI失败，用规则）"; }
+  } else {
+    grammarIssues = checkGrammarRules(essay);
+    aiGrammarNote = "（规则检查，设API Key启用AI）";
+  }
+
+  var fixItems = [];
+  var goodItems = [];
+  var patterns = library.filter(function(x){return x.type === "句式";});
+  var essayLower = essay.toLowerCase();
+  var used = [];
+  var notUsed = [];
+  for (var item of patterns) {
+    var pat = item.pattern.toLowerCase();
+    var idx = essayLower.indexOf(pat);
+    if (idx === -1) { notUsed.push(item); }
+    else {
+      var isStart = item.position.indexOf("句首") !== -1;
+      var before = essay.slice(0, idx);
+      var atStart = /(^|[.!?]\s+)$/.test(before.trim()) || idx < 5;
+      if (isStart && !atStart) {
+        used.push({ type: "fix", item: item, desc: "用了「" + item.pattern + "」但位置不对，应放句首", ex: "如：" + item.example });
+        fixItems.push({ item: item, desc: "位置错" });
+      } else {
+        used.push({ type: "good", item: item, desc: "用对了「" + item.pattern + "」且位置正确", ex: "语法点：" + item.grammar });
+        goodItems.push({ item: item });
+      }
+    }
+  }
+  var minLv = minLevelForTarget();
+  var filteredSuggest = notUsed.filter(function(item){ return levelNum(item.level) >= minLv; });
+  var filteredOut = notUsed.length - filteredSuggest.length;
+  var suggests = filteredSuggest.slice(-2).map(function(item) {
+    return { type: "suggest", item: item, desc: "可考虑用「" + item.pattern + "」(" + item.level + ")：" + item.grammar, ex: "例：" + item.example };
+  });
+
+  var added = autoStoreFromCheck(grammarIssues, fixItems, goodItems);
+
+  var html = "";
+  if (added.fix + added.master > 0) html += '<div class="auto-add-note">本次自动入库：<b>' + added.master + '</b> 条已掌握 + <span class="red">' + added.fix + '</span> 条纠错</div>';
+  if (filteredOut > 0) html += '<div class="auto-add-note" style="color:var(--text-light)">已按目标 ' + targetScore + '+ 过滤 ' + filteredOut + ' 条低分表达</div>';
+
+  html += '<div class="result-section">语法检查 ' + aiGrammarNote + '（共 ' + grammarIssues.length + " 条）</div>";
+  if (grammarIssues.length === 0) html += '<div class="result-empty">未发现明显语法问题</div>';
+  else { for (var g of grammarIssues) { html += '<div class="result-item grammar"><div class="type">' + (g.title||"问题") + '</div><div class="desc">' + (g.desc||"") + '</div><div class="ex">修正：' + (g.fix||"") + '</div><div class="stored red">已自动入库 → 纠错</div></div>'; } }
+
+  html += '<div class="result-section">句式提醒（用对 ' + goodItems.length + " · 需修正 " + fixItems.length + " · 建议加 " + suggests.length + (filteredOut>0?" · 已过滤"+filteredOut:"") + "）</div>";
+  var typeLabel = { good: "用对了", fix: "需修正", suggest: "建议加" };
+  var all = used.concat(suggests);
+  var order = { fix: 0, good: 1, suggest: 2 };
+  all.sort(function(a,b){ return order[a.type] - order[b.type]; });
+  if (all.length === 0) html += '<div class="result-empty">没有句式相关提醒</div>';
+  else { for (var r of all) { var extra = ""; if (r.type === "fix") extra = '<div class="stored red">已自动入库 → 纠错</div>'; else if (r.type === "good") extra = '<div class="stored blue">已自动入库 → 已掌握</div>'; html += '<div class="result-item ' + r.type + '"><div class="type">' + typeLabel[r.type] + '</div><div class="desc">' + r.desc + '</div><div class="ex">' + r.ex + "</div>" + extra + "</div>"; } }
+
+  resultBox.innerHTML = html;
+  btn.disabled = false;
+}
+
+loadLib();
+document.getElementById("targetScore").value = targetScore;
+document.getElementById("apiKeyInput").value = localStorage.getItem("dsApiKey") || "";
+updateApiStatus();
+renderLib();
+renderTopicImages();
+setupVoiceButtons();
+</script>
+
+</body>
+</html>
