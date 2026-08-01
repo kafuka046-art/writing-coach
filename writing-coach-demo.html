@@ -136,6 +136,21 @@
 }
 .voice-mini-btn:hover { background: var(--blue-soft); border-color: #85b7eb; }
 .voice-mini-btn.recording { background: var(--coral); color: white; border-color: var(--coral); animation: pulse 1.5s infinite; }
+
+/* AI 讲解文本轻渲染 */
+.ai-text { white-space: normal; }
+.ai-text .ai-h { font-weight: 600; color: var(--blue); margin-top: 6px; }
+.ai-text .ai-li { padding-left: 10px; }
+.ai-text .ai-p { margin: 2px 0; }
+
+/* 移动端适配 */
+@media (max-width: 900px) {
+  body { padding: 10px; }
+  .columns { grid-template-columns: 1fr; }
+  .settings-bar { flex-direction: column; align-items: stretch; }
+  .settings-bar input { width: 100%; }
+  .settings-bar .hint { margin-left: 0 !important; }
+}
 </style>
 </head>
 <body>
@@ -147,7 +162,7 @@
 
 <div class="settings-bar">
   <span style="font-size:12px;font-weight:500">DeepSeek API Key：</span>
-  <input type="password" id="apiKeyInput" placeholder="sk-...（填入后启用 AI）" style="width:240px">
+  <input type="password" id="apiKeyInput" placeholder="sk-...（填入后启用 AI）" style="width:240px" title="API Key 仅保存在本机浏览器 localStorage，注意勿泄露">
   <button onclick="saveApiKey()">保存</button>
   <span id="apiStatus" class="hint">未设置（用预设规则）</span>
   <span style="font-size:12px;margin-left:8px">语音：</span>
@@ -265,6 +280,65 @@ var topicImages = [];
 var targetScore = 6.5;
 var filterMode = "all";
 
+// ---- 安全与格式化工具 ----
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function fmtAI(text) {
+  var lines = String(text == null ? "" : text).split("\n");
+  var html = "";
+  for (var i = 0; i < lines.length; i++) {
+    var line = esc(lines[i]).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    if (/^#{1,6}\s+/.test(line)) html += '<div class="ai-h">' + line.replace(/^#{1,6}\s+/, "") + "</div>";
+    else if (/^[-*]\s+/.test(line)) html += '<div class="ai-li">\u2022 ' + line.replace(/^[-*]\s+/, "") + "</div>";
+    else html += '<div class="ai-p">' + line + "</div>";
+  }
+  return html;
+}
+function toLevel(n) { n = parseFloat(n); return n >= 7 ? "7分" : (n >= 6 ? "6分" : "5分"); }
+function extractLevel(text) {
+  if (!text) return "6分";
+  var m = String(text).match(/等级\s*[:：]?\s*(\d(?:\.\d+)?)\s*分/);
+  if (m) return toLevel(m[1]);
+  var all = String(text).match(/([567])\s*分/g);
+  if (all && all.length) return all[all.length - 1].charAt(0) + "分";
+  return "6分";
+}
+function extractJsonArray(text) {
+  if (!text) return null;
+  var t = String(text).replace(/```(?:json)?/gi, "").trim();
+  var start = t.indexOf("[");
+  var end = t.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    var arr = JSON.parse(t.slice(start, end + 1));
+    return Array.isArray(arr) ? arr : null;
+  } catch (e) { return null; }
+}
+function findPattern(essay, item) {
+  var p = item && item.pattern;
+  if (!p) return -1;
+  // 1) 已知特殊配对句式（not only...but also 等）用 PRESETS 正则匹配
+  for (var i = 0; i < PRESETS.length; i++) {
+    if (PRESETS[i].pattern === p) {
+      var m = essay.match(PRESETS[i].regex);
+      return m ? m.index : -1;
+    }
+  }
+  // 2) 纯字母/数字/空格/连字符/撇号句式：词边界匹配（避免 "in" 误匹配 "interesting"）
+  if (/^[\w\s\-''’]+$/.test(p)) {
+    return essay.search(new RegExp("\\b" + escapeRegExp(p) + "\\b", "i"));
+  }
+  // 3) 含标点等特殊字符的句式（如自定义句子片段）：纯子串匹配
+  return essay.toLowerCase().indexOf(p.toLowerCase());
+}
+
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
 function hasApiKey() { return !!localStorage.getItem("dsApiKey"); }
@@ -345,7 +419,7 @@ async function toggleVoice(target) {
     return;
   }
   if (location.protocol === "file:") {
-    alert("当前是 file:// 协议打开的，麦克风权限受限会导致语音秒关。\n\n请用 localhost 访问：\n1. 我帮你起了本地服务器\n2. 浏览器打开 http://localhost:8766/writing-coach-demo.html\n3. 再点语音按钮，会弹麦克风权限请求，点允许");
+    alert("当前是 file:// 协议打开的，麦克风权限受限会导致语音秒关。\n\n请用 localhost 访问：\n1. 运行 node proxy-server.js\n2. 浏览器打开 http://localhost:8768/\n3. 再点语音按钮，会弹麦克风权限请求，点允许");
     return;
   }
   try {
@@ -390,13 +464,17 @@ async function toggleVoice(target) {
 }
 
 function loadLib() {
-  try { var raw = localStorage.getItem("writingCoachLib4"); library = raw ? JSON.parse(raw) : []; } catch(e) { library = []; }
-  if (library.length === 0) {
+  var raw = localStorage.getItem("writingCoachLib4");
+  if (raw === null) {
+    // 仅首次使用时播种示例；用户清空后保持为空，不再复活
     library = [
       { id: uid(), sentence: "Over the period, the trend showed a significant increase.", pattern: "over the period", grammar: "介词短语作时间状语", position: "句首", example: "Over the period, sales doubled.", note: "放句首最自然", source: "预置范文", createdAt: Date.now(), type: "句式", question: "", level: "6分" },
       { id: uid(), sentence: "It is evident that the policy had a profound impact.", pattern: "it is evident that", grammar: "形式主语，引出判断", position: "句首", example: "It is evident that the new policy worked.", note: "用于下结论", source: "预置范文", createdAt: Date.now(), type: "句式", question: "", level: "6分" }
     ];
     saveLib();
+  } else {
+    try { library = JSON.parse(raw); } catch(e) { library = []; saveLib(); }
+    if (!Array.isArray(library)) { library = []; saveLib(); }
   }
   try { var t = localStorage.getItem("writingCoachTarget"); if (t) targetScore = parseFloat(t); } catch(e) {}
 }
@@ -461,8 +539,7 @@ async function learn() {
       var llmAnswer = await callLLM(prompt, "你是英语写作教练，针对用户具体句子精细解释语法。用中文，结构化，必须引用句子里的具体词，教学性强。");
       hideLoading();
       if (llmAnswer && llmAnswer.indexOf("ERROR") !== 0) {
-        var levelMatch = llmAnswer.match(/等级[:：]\s*(\d)分/);
-        var lv = levelMatch ? (levelMatch[1] + "分") : "6分";
+        var lv = extractLevel(llmAnswer);
         entry = { id: uid(), sentence: sentence || "(只提问)", pattern: "AI：" + question.slice(0,18), grammar: llmAnswer, position: "-", example: "", note: "你问的：" + question, source: "AI解释", createdAt: Date.now(), type: "语言点", question: question, level: lv };
         library.push(entry);
         saveLib();
@@ -473,15 +550,12 @@ async function learn() {
         btn.disabled = false;
         return;
       }
-      // LLM 失败且有 key：明确报错入库，不要 fallback 到误导预设
-      entry = { id: uid(), sentence: sentence || "(只提问)", pattern: "AI 调用失败", grammar: "AI 调用失败：" + (llmAnswer || "未知错误") + "\n\n请检查：\n1. 是否通过 http://localhost:8768/ 访问（proxy-server.js 在跑）\n2. DeepSeek API Key 是否正确\n3. 网络/科学上网是否通畅", position: "-", example: "", note: "你问的：" + question, source: "AI失败", createdAt: Date.now(), type: "语言点", question: question, level: "6分" };
-      library.push(entry);
-      saveLib();
-      renderLib();
-      renderExplain(entry);
-      document.getElementById("learnInput").value = "";
-      document.getElementById("questionInput").value = "";
+      // LLM 失败且有 key：在结果区明确报错，但不污染知识库
       btn.disabled = false;
+      document.getElementById("explainResult").innerHTML =
+        '<div class="explain-box fix"><div class="pat">AI 调用失败（未入库）</div><div class="row" style="white-space:pre-wrap">' +
+        esc("AI 调用失败：" + (llmAnswer || "未知错误") + "\n\n请检查：\n1. 是否通过 http://localhost:8768/ 访问（proxy-server.js 在跑）\n2. DeepSeek API Key 是否正确\n3. 网络/科学上网是否通畅") +
+        "</div></div>";
       return;
     }
     var qa = matchQA(question);
@@ -497,8 +571,7 @@ async function learn() {
       var macroAnswer = await callLLM(macroPrompt, "你是英语写作教练，从宏观角度解释句子整体结构。用中文，结构化。");
       hideLoading();
       if (macroAnswer && macroAnswer.indexOf("ERROR") !== 0) {
-        var levelMatch2 = macroAnswer.match(/等级[:：]\s*(\d)分/);
-        var lv2 = levelMatch2 ? (levelMatch2[1] + "分") : "6分";
+        var lv2 = extractLevel(macroAnswer);
         entry = { id: uid(), sentence: sentence, pattern: "AI宏观：" + sentence.slice(0,18), grammar: macroAnswer, position: "-", example: "", note: "宏观结构解释（无具体问题）", source: "AI解释", createdAt: Date.now(), type: "语言点", question: "", level: lv2 };
         library.push(entry);
         saveLib();
@@ -535,11 +608,11 @@ function renderExplain(entry) {
   if (entry.type === "纠错") { cls = "explain-box fix"; label = "纠错"; }
   if (entry.type === "已掌握") { cls = "explain-box master"; label = "已掌握"; }
   var html = '<div class="' + cls + '">';
-  html += '<div class="pat">已入库 · ' + label + "：" + entry.pattern + ' <span class="level-tag ' + levelTagClass(entry.level) + '">' + entry.level + "</span></div>";
-  html += '<div class="row"><b>原句：</b>' + entry.sentence + "</div>";
-  html += '<div class="row" style="white-space:pre-wrap"><b>解释：</b>' + entry.grammar + "</div>";
-  if (entry.example) html += '<div class="row"><b>例句：</b>' + entry.example + "</div>";
-  if (entry.note) html += '<div class="row"><b>备注：</b>' + entry.note + "</div>";
+  html += '<div class="pat">已入库 · ' + esc(label) + "：" + esc(entry.pattern) + ' <span class="level-tag ' + levelTagClass(entry.level) + '">' + esc(entry.level) + "</span></div>";
+  html += '<div class="row"><b>原句：</b>' + esc(entry.sentence) + "</div>";
+  html += '<div class="row ai-text"><b>解释：</b>' + fmtAI(entry.grammar) + "</div>";
+  if (entry.example) html += '<div class="row"><b>例句：</b>' + esc(entry.example) + "</div>";
+  if (entry.note) html += '<div class="row"><b>备注：</b>' + esc(entry.note) + "</div>";
   html += "</div>";
   box.innerHTML = html;
 }
@@ -579,7 +652,7 @@ function renderLib() {
   var minLv = minLevelForTarget();
   list.innerHTML = library.slice().reverse().map(function(item) {
     var cls = "lib-item pat";
-    var tag = '位置：<span class="pos">' + item.position + "</span>";
+    var tag = '位置：<span class="pos">' + esc(item.position) + "</span>";
     if (item.type === "语言点") { cls = item.source === "AI解释" ? "lib-item lp" : "lib-item lp"; tag = '<span class="lp-tag">语言点</span>'; }
     else if (item.type === "纠错") { cls = "lib-item fix"; tag = '<span class="fix-tag">纠错</span>'; }
     else if (item.type === "已掌握") { cls = "lib-item master"; tag = '<span class="m-tag">已掌握</span>'; }
@@ -587,19 +660,19 @@ function renderLib() {
     var dim = "";
     if (filterMode === "target" && levelNum(lv) < minLv) dim = " dim";
     if (filterMode === "high" && levelNum(lv) < 7) dim = " dim";
-    var qHtml = item.question ? '<div class="lib-item-q">💬 你的问题：' + item.question + "</div>" : "";
+    var qHtml = item.question ? '<div class="lib-item-q">💬 你的问题：' + esc(item.question) + "</div>" : "";
     return '<div class="' + cls + dim + '">' +
-      '<span class="del" onclick="delItem(\'' + item.id + '\')">删除</span>' +
+      '<span class="del" data-del="' + esc(item.id) + '">删除</span>' +
       qHtml +
-      '<div class="sent">"' + (item.sentence || "(无)") + '"</div>' +
-      '<div class="meta"><b>' + item.pattern + '</b> <span class="level-tag ' + levelTagClass(lv) + '">' + lv + "</span>　|　" + tag + "　|　" + item.source + "</div>" +
+      '<div class="sent">"' + esc(item.sentence || "(无)") + '"</div>' +
+      '<div class="meta"><b>' + esc(item.pattern) + '</b> <span class="level-tag ' + levelTagClass(lv) + '">' + esc(lv) + "</span>　|　" + tag + "　|　" + esc(item.source) + "</div>" +
     "</div>";
   }).join("");
 }
 
 function delItem(id) { library = library.filter(function(x){return x.id !== id;}); saveLib(); renderLib(); }
 function clearLearn() { document.getElementById("learnInput").value = ""; document.getElementById("questionInput").value = ""; document.getElementById("explainResult").innerHTML = ""; }
-function clearEssay() { document.getElementById("essayInput").value = ""; document.getElementById("checkResult").innerHTML = ""; }
+function clearEssay() { document.getElementById("essayInput").value = ""; localStorage.removeItem("writingCoachDraft"); document.getElementById("checkResult").innerHTML = ""; }
 
 function exportLib() {
   var data = JSON.stringify(library, null, 2);
@@ -614,7 +687,24 @@ function importLib(e) {
   var file = e.target.files[0]; if (!file) return;
   var reader = new FileReader();
   reader.onload = function(ev) {
-    try { var data = JSON.parse(ev.target.result); if (Array.isArray(data)) { library = data; saveLib(); renderLib(); alert("导入成功，共 " + library.length + " 条"); } else { alert("文件格式不对"); } } catch(err) { alert("导入失败：" + err.message); }
+    try {
+      var data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) { alert("文件格式不对"); return; }
+      var seen = {};
+      library = data.map(function(x) {
+        if (!x || typeof x !== "object") return null;
+        var id = (typeof x.id === "string" && x.id) ? x.id : uid();
+        while (seen[id]) id = uid();
+        seen[id] = true;
+        var item = { id: id, sentence: "", pattern: "", grammar: "", position: "-", example: "", note: "", source: "导入", createdAt: Date.now(), type: "句式", question: "", level: "6分" };
+        ["sentence","pattern","grammar","position","example","note","source","question"].forEach(function(k) { if (typeof x[k] === "string") item[k] = x[k]; });
+        if (typeof x.createdAt === "number") item.createdAt = x.createdAt;
+        if (x.type === "语言点" || x.type === "纠错" || x.type === "已掌握") item.type = x.type;
+        if (x.level === "5分" || x.level === "6分" || x.level === "7分") item.level = x.level;
+        return item;
+      }).filter(function(x) { return x; });
+      saveLib(); renderLib(); alert("导入成功，共 " + library.length + " 条");
+    } catch(err) { alert("导入失败：" + err.message); }
   };
   reader.readAsText(file); e.target.value = "";
 }
@@ -708,11 +798,13 @@ async function check() {
     var llmResult = await callLLM(prompt, "你是英语写作教练，检查作文语法。只返回JSON数组。");
     hideLoading();
     if (llmResult && llmResult.indexOf("ERROR") !== 0) {
-      try {
-        var cleaned = llmResult.replace(/```json|```/g, "").trim();
-        grammarIssues = JSON.parse(cleaned);
+      var parsedIssues = extractJsonArray(llmResult);
+      if (parsedIssues) {
+        grammarIssues = parsedIssues.filter(function(x){ return x && typeof x === "object"; }).map(function(x){
+          return { title: (typeof x.title === "string" ? x.title : "问题"), desc: (typeof x.desc === "string" ? x.desc : ""), fix: (typeof x.fix === "string" ? x.fix : ""), level: (x.level === "5分" || x.level === "6分" || x.level === "7分") ? x.level : "6分" };
+        });
         aiGrammarNote = "（AI 检查）";
-      } catch(e) { grammarIssues = checkGrammarRules(essay); aiGrammarNote = "（AI返回解析失败，用规则）"; }
+      } else { grammarIssues = checkGrammarRules(essay); aiGrammarNote = "（AI返回解析失败，用规则）"; }
     } else { grammarIssues = checkGrammarRules(essay); aiGrammarNote = "（AI失败，用规则）"; }
   } else {
     grammarIssues = checkGrammarRules(essay);
@@ -722,17 +814,16 @@ async function check() {
   var fixItems = [];
   var goodItems = [];
   var patterns = library.filter(function(x){return x.type === "句式";});
-  var essayLower = essay.toLowerCase();
   var used = [];
   var notUsed = [];
-  for (var item of patterns) {
-    var pat = item.pattern.toLowerCase();
-    var idx = essayLower.indexOf(pat);
+  for (var i2 = 0; i2 < patterns.length; i2++) {
+    var item = patterns[i2];
+    var idx = findPattern(essay, item);
     if (idx === -1) { notUsed.push(item); }
     else {
       var isStart = item.position.indexOf("句首") !== -1;
       var before = essay.slice(0, idx);
-      var atStart = /(^|[.!?]\s+)$/.test(before.trim()) || idx < 5;
+      var atStart = /(^|[.!?])\s*$/.test(before.trim()) || idx < 5;
       if (isStart && !atStart) {
         used.push({ type: "fix", item: item, desc: "用了「" + item.pattern + "」但位置不对，应放句首", ex: "如：" + item.example });
         fixItems.push({ item: item, desc: "位置错" });
@@ -745,7 +836,7 @@ async function check() {
   var minLv = minLevelForTarget();
   var filteredSuggest = notUsed.filter(function(item){ return levelNum(item.level) >= minLv; });
   var filteredOut = notUsed.length - filteredSuggest.length;
-  var suggests = filteredSuggest.slice(-2).map(function(item) {
+  var suggests = filteredSuggest.slice().sort(function(a,b){ return levelNum(b.level) - levelNum(a.level); }).slice(0, 2).map(function(item) {
     return { type: "suggest", item: item, desc: "可考虑用「" + item.pattern + "」(" + item.level + ")：" + item.grammar, ex: "例：" + item.example };
   });
 
@@ -757,7 +848,7 @@ async function check() {
 
   html += '<div class="result-section">语法检查 ' + aiGrammarNote + '（共 ' + grammarIssues.length + " 条）</div>";
   if (grammarIssues.length === 0) html += '<div class="result-empty">未发现明显语法问题</div>';
-  else { for (var g of grammarIssues) { html += '<div class="result-item grammar"><div class="type">' + (g.title||"问题") + '</div><div class="desc">' + (g.desc||"") + '</div><div class="ex">修正：' + (g.fix||"") + '</div><div class="stored red">已自动入库 → 纠错</div></div>'; } }
+  else { for (var g of grammarIssues) { html += '<div class="result-item grammar"><div class="type">' + esc(g.title||"问题") + '</div><div class="desc">' + esc(g.desc||"") + '</div><div class="ex">修正：' + esc(g.fix||"") + '</div><div class="stored red">已自动入库 → 纠错</div></div>'; } }
 
   html += '<div class="result-section">句式提醒（用对 ' + goodItems.length + " · 需修正 " + fixItems.length + " · 建议加 " + suggests.length + (filteredOut>0?" · 已过滤"+filteredOut:"") + "）</div>";
   var typeLabel = { good: "用对了", fix: "需修正", suggest: "建议加" };
@@ -765,7 +856,7 @@ async function check() {
   var order = { fix: 0, good: 1, suggest: 2 };
   all.sort(function(a,b){ return order[a.type] - order[b.type]; });
   if (all.length === 0) html += '<div class="result-empty">没有句式相关提醒</div>';
-  else { for (var r of all) { var extra = ""; if (r.type === "fix") extra = '<div class="stored red">已自动入库 → 纠错</div>'; else if (r.type === "good") extra = '<div class="stored blue">已自动入库 → 已掌握</div>'; html += '<div class="result-item ' + r.type + '"><div class="type">' + typeLabel[r.type] + '</div><div class="desc">' + r.desc + '</div><div class="ex">' + r.ex + "</div>" + extra + "</div>"; } }
+  else { for (var r of all) { var extra = ""; if (r.type === "fix") extra = '<div class="stored red">已自动入库 → 纠错</div>'; else if (r.type === "good") extra = '<div class="stored blue">已自动入库 → 已掌握</div>'; html += '<div class="result-item ' + r.type + '"><div class="type">' + esc(typeLabel[r.type]) + '</div><div class="desc">' + esc(r.desc) + '</div><div class="ex">' + esc(r.ex) + "</div>" + extra + "</div>"; } }
 
   resultBox.innerHTML = html;
   btn.disabled = false;
@@ -778,6 +869,21 @@ updateApiStatus();
 renderLib();
 renderTopicImages();
 setupVoiceButtons();
+// 作文草稿自动保存（防刷新丢失）
+document.getElementById("essayInput").value = localStorage.getItem("writingCoachDraft") || "";
+var draftTimer = null;
+document.getElementById("essayInput").addEventListener("input", function() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(function() {
+    localStorage.setItem("writingCoachDraft", document.getElementById("essayInput").value);
+  }, 400);
+});
+// 知识库删除改用事件委托（data-del，避免内联 onclick 注入风险）
+document.getElementById("libraryList").addEventListener("click", function(e) {
+  var el = e.target;
+  while (el && el !== this && !el.dataset.del) el = el.parentNode;
+  if (el && el.dataset.del) delItem(el.dataset.del);
+});
 </script>
 
 </body>
