@@ -140,6 +140,18 @@
 .voice-mini-btn:hover { background: var(--blue-soft); border-color: #85b7eb; }
 .voice-mini-btn.recording { background: var(--coral); color: white; border-color: var(--coral); animation: pulse 1.5s infinite; }
 
+/* 仿写闭环：学 → 练 → 判 → 回流知识库 */
+.practice { margin-top: 10px; padding: 10px 12px; border: 1px dashed #85b7eb; border-radius: var(--radius); background: var(--blue-soft); }
+.practice .p-title { font-size: 12px; font-weight: 600; color: var(--blue); margin-bottom: 2px; }
+.practice .p-desc { font-size: 11px; line-height: 1.5; color: var(--text-mid); margin-bottom: 6px; }
+.practice input[type=text] { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 12px; margin-bottom: 6px; }
+.practice input[type=text]:focus { outline: none; border-color: var(--blue); }
+.practice-result { margin-top: 8px; font-size: 11px; line-height: 1.6; }
+.pr-head { font-weight: 600; margin-bottom: 4px; }
+.pr-head.ok { color: var(--green); }
+.pr-head.bad { color: var(--coral); }
+.pr-line { color: var(--text-mid); }
+.pr-stored { color: var(--text-light); font-size: 10px; margin-top: 4px; }
 /* AI 讲解文本轻渲染 */
 .ai-text { white-space: normal; }
 .ai-text .ai-h { font-weight: 600; color: var(--blue); margin-top: 6px; }
@@ -660,6 +672,143 @@ function renderExplain(entry) {
   if (entry.note) html += '<div class="row"><b>备注：</b>' + esc(entry.note) + "</div>";
   html += "</div>";
   box.innerHTML = html;
+  renderPracticeBlock(entry);
+}
+
+// ---- 仿写闭环：学 → 练 → 判 → 回流知识库 ----
+function renderPracticeBlock(entry) {
+  var box = document.getElementById("explainResult");
+  if (!box) return;
+  var wrap = document.createElement("div");
+  wrap.className = "practice";
+  wrap.id = "practiceBox";
+  wrap.dataset.entryId = entry.id;
+  wrap.innerHTML =
+    '<div class="p-title">现在轮到你了</div>' +
+    '<div class="p-desc">用「' + esc(entry.pattern) + '」写一句自己的话；AI 判断用没用对，对错都会回流知识库。</div>' +
+    '<input type="text" id="practiceInput" placeholder="照刚学的句式写一句英文，回车提交">' +
+    '<button id="practiceBtn" onclick="submitPractice()">检查我这句</button>' +
+    '<div class="practice-result" id="practiceResult"></div>';
+  box.appendChild(wrap);
+  var input = document.getElementById("practiceInput");
+  if (!input) return;
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); submitPractice(); }
+  });
+  input.focus();
+}
+
+function practiceEntry() {
+  var box = document.getElementById("practiceBox");
+  if (!box) return null;
+  var id = box.dataset.entryId;
+  for (var i = 0; i < library.length; i++) { if (library[i].id === id) return library[i]; }
+  return null;
+}
+
+async function submitPractice() {
+  var entry = practiceEntry();
+  var input = document.getElementById("practiceInput");
+  var out = document.getElementById("practiceResult");
+  var btn = document.getElementById("practiceBtn");
+  if (!entry || !input || !out || !btn) return;
+  var sentence = input.value.trim();
+  if (!sentence) { out.className = "practice-result bad"; out.textContent = "先写一句再检查。"; input.focus(); return; }
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = "判断中...";
+  var res = null, judgeNote = "";
+
+  if (hasApiKey()) {
+    var prompt = "学生正在做仿写练习，请判断他有没有把目标句式用对。\n\n目标句式：" + entry.pattern +
+      "\n句式说明：" + (entry.grammar || "(无)") +
+      "\n要求位置：" + (entry.position || "-") +
+      (entry.question ? "\n原始问题：" + entry.question : "") +
+      "\n\n学生写的句子：\n" + sentence +
+      "\n\n严格只返回一个 JSON 对象，不要 markdown 代码块、不要多余文字：\n" +
+      '{"ok":true,"target":"学生句子里体现目标句式的片段","fixed":"用错时给出改对的完整句子；用对时原样返回学生句子","why":"30字以内中文说明对错在哪"}';
+    var raw = await callLLM(prompt, "你是雅思写作教练。只返回 JSON 对象，不要代码块。");
+    if (raw && raw.indexOf("ERROR") !== 0) {
+      res = extractJsonObject(raw);
+      if (res) { res.ok = (res.ok === true || String(res.ok).toLowerCase() === "true"); judgeNote = "（AI 判断）"; }
+    }
+    if (!res) judgeNote = "（AI 不可用，本地规则判断）";
+  } else {
+    judgeNote = "（本地规则判断，配 Key 可让 AI 判得更准）";
+  }
+
+  if (!res) {
+    var idx = findPattern(sentence, entry);
+    if (idx === -1) {
+      res = { ok: false, target: "", fixed: "", why: "句子里没出现目标句式「" + entry.pattern + "」。" };
+    } else if ((entry.position || "").indexOf("句首") !== -1) {
+      var before = sentence.slice(0, idx);
+      var atStart = /(^|[.!?])\s*$/.test(before.trim()) || idx < 5;
+      res = atStart
+        ? { ok: true, target: sentence.slice(idx, idx + 60), fixed: sentence, why: "句式出现了，位置也在句首。" }
+        : { ok: false, target: sentence.slice(idx, idx + 60), fixed: "", why: "句式出现了，但没放在句首。" };
+    } else {
+      res = { ok: true, target: sentence.slice(idx, idx + 60), fixed: sentence, why: "句式已出现，本地规则未发现明显问题。" };
+    }
+  }
+
+  btn.disabled = false; btn.textContent = "再检查一次";
+  renderPracticeResult(res, sentence, judgeNote);
+  storePractice(res.ok, entry, sentence, res, judgeNote);
+}
+
+function renderPracticeResult(res, sentence, judgeNote) {
+  var out = document.getElementById("practiceResult");
+  if (!out) return;
+  var html = '<div class="pr-head ' + (res.ok ? "ok" : "bad") + '">' + (res.ok ? "✅ 用对了" : "❌ 还没用对") + esc(judgeNote || "") + "</div>";
+  if (res.target) html += '<div class="pr-line">句中片段：' + esc(res.target) + "</div>";
+  if (!res.ok && res.fixed) html += '<div class="pr-line">改成：' + esc(res.fixed) + "</div>";
+  if (res.why) html += '<div class="pr-line">' + esc(res.why) + "</div>";
+  html += '<div class="pr-stored">已回流知识库 → ' + (res.ok ? "已掌握" : "纠错") + "</div>";
+  out.className = "practice-result";
+  out.innerHTML = html;
+}
+
+// 同一个句式反复练只保留一条记录；这次用对就把之前的「纠错」翻成「已掌握」（纠错消解）
+function storePractice(ok, entry, sentence, res, judgeNote) {
+  var wrongPattern = "仿写：" + entry.pattern;
+  var found = null;
+  for (var i = 0; i < library.length; i++) {
+    var x = library[i];
+    if (x.source === "仿写闭环" && (x.pattern === entry.pattern || x.pattern === wrongPattern)) { found = x; break; }
+  }
+  var patch = {
+    sentence: sentence,
+    grammar: ok ? (entry.grammar || "仿写用对") : (res.why || "仿写用错"),
+    example: (!ok && res.fixed) ? res.fixed : (entry.example || ""),
+    note: "仿写练习" + (judgeNote || ""),
+    createdAt: Date.now(),
+    type: ok ? "已掌握" : "纠错",
+    level: entry.level || "6分"
+  };
+  if (found) {
+    for (var k in patch) found[k] = patch[k];
+    found.pattern = ok ? entry.pattern : wrongPattern;
+  } else {
+    patch.id = uid();
+    patch.pattern = ok ? entry.pattern : wrongPattern;
+    patch.position = entry.position || "-";
+    patch.source = "仿写闭环";
+    patch.question = "";
+    library.push(patch);
+  }
+  saveLib();
+  renderLib();
+}
+
+function extractJsonObject(text) {
+  if (!text) return null;
+  var t = String(text).replace(/```(?:json)?/gi, "").trim();
+  var s = t.indexOf("{"), e = t.lastIndexOf("}");
+  if (s === -1 || e === -1 || e <= s) return null;
+  try {
+    var obj = JSON.parse(t.slice(s, e + 1));
+    return (obj && typeof obj === "object" && !Array.isArray(obj)) ? obj : null;
+  } catch (err) { return null; }
 }
 
 function renderLevelAnalysis() {
