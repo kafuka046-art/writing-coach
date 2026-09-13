@@ -97,7 +97,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405); res.end('Method not allowed'); return;
   }
-  if (urlPath === '/') urlPath = '/writing-coach-demo.html';
+  if (urlPath === '/') urlPath = '/index.html';
   const filePath = path.resolve(ROOT, '.' + urlPath);
   if (filePath !== ROOT && !filePath.startsWith(ROOT + path.sep)) {
     res.writeHead(403); res.end('Forbidden'); return;
@@ -117,7 +117,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('========================================');
   console.log(`\n  浏览器打开:  http://localhost:${PORT}/`);
   console.log(`\n  提供:`);
-  console.log(`    - Demo 文件 (writing-coach-demo.html)`);
+  console.log(`    - 主程序 (index.html)`);
   console.log(`    - 代理 /api/chat -> DeepSeek API`);
   console.log(`    - 解决浏览器 CORS 阻止调用 DeepSeek 的问题`);
   console.log(`\n  安全:`);

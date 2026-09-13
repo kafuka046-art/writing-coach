@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写作助手 · AI 知识库</title>
+<title>Writing Coach · AI 英语写作助手</title>
+<meta name="description" content="AI 英语写作学习工具：入库学表达、出库查作文、对错自动回流知识库，对标雅思 5/6/7 分能力段。">
 <style>
   :root {
     --bg: #ffffff; --bg-soft: #f7f7f4; --bg-card: #fbfbf8;
@@ -150,7 +151,17 @@
   .settings-bar { flex-direction: column; align-items: stretch; }
   .settings-bar input { width: 100%; }
   .settings-bar .hint { margin-left: 0 !important; }
+  .settings-bar input { width: 100% !important; }
+  .img-wrap img { max-width: 100%; }
 }
+  /* 首次进入引导 */
+  .first-run { max-width: 1100px; margin: 0 auto 12px; padding: 10px 14px; background: var(--green-soft); border: 1px solid #9fe1cb; border-radius: var(--radius); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .first-run > b { color: var(--green); }
+  .first-run .fr-step { color: var(--text-mid); }
+  .first-run .fr-step b { color: var(--text); }
+  .first-run a { color: var(--blue); }
+  .first-run code { background: #fff; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; font-size: 11px; }
+  .first-run .fr-close { align-self: flex-end; color: var(--text-light); cursor: pointer; font-size: 11px; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -159,10 +170,16 @@
   <h1>写作助手 · AI 知识库（DeepSeek 驱动）</h1>
   <p>填入 DeepSeek API Key 后：问为什么 → AI 针对你句子解释 · 写作检查 → AI 查语法+给建议 · 对错自动入库 · 标分过滤</p>
 </header>
-
+<div class="first-run" id="firstRun">
+  <b>第一次用？三步看懂</b>
+  <span class="fr-step">① <b>不注册也能玩</b>：点左边 <b>Not only…but also…</b> → 「解释并入库」；再点右边 <b>填示例作文</b> → 「检查并自动入库」，完整闭环立刻可见</span>
+  <span class="fr-step">② <b>想用 AI 讲解/检查</b>：<a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">申请 DeepSeek Key</a>（有免费额度），填到上方输入框并保存，模型 <code>deepseek-flash</code></span>
+  <span class="fr-step">③ <b>隐私</b>：Key 与知识库只存在你本机浏览器（localStorage），不经过本项目任何服务器</span>
+  <span class="fr-close" id="frClose">知道了，关掉</span>
+</div>
 <div class="settings-bar">
   <span style="font-size:12px;font-weight:500">DeepSeek API Key：</span>
-  <input type="password" id="apiKeyInput" placeholder="sk-...（填入后启用 AI）" style="width:240px" title="API Key 仅保存在本机浏览器 localStorage，注意勿泄露">
+  <input type="password" id="apiKeyInput" placeholder="sk-...（填入后启用 AI）" style="width:240px;max-width:100%" title="API Key 仅保存在本机浏览器 localStorage，注意勿泄露">
   <button onclick="saveApiKey()">保存</button>
   <span id="apiStatus" class="hint">未设置（用预设规则）</span>
   <span style="font-size:12px;margin-left:8px">语音：</span>
@@ -170,7 +187,7 @@
     <option value="zh-CN">中文</option>
     <option value="en-US">English</option>
   </select>
-  <span class="hint" style="margin-left:auto">模型：deepseek-v4-flash · <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--blue)">获取 Key</a></span>
+  <span class="hint" style="margin-left:auto">模型：deepseek-flash（V4.1）· <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--blue)">获取 Key</a></span>
 </div>
 
 <div class="columns">
@@ -347,10 +364,17 @@ function saveApiKey() {
   if (key) localStorage.setItem("dsApiKey", key); else localStorage.removeItem("dsApiKey");
   updateApiStatus();
 }
+function updateFirstRun() {
+  var el = document.getElementById("firstRun");
+  if (!el) return;
+  var closed = localStorage.getItem("writingCoachTipClosed") === "1";
+  el.style.display = (!hasApiKey() && !closed) ? "flex" : "none";
+}
 function updateApiStatus() {
   var s = document.getElementById("apiStatus");
   if (hasApiKey()) s.innerHTML = '<span style="color:var(--green);font-weight:500">已启用 AI 解释</span>';
-  else s.textContent = "未设置（用预设规则）";
+  else s.textContent = "未设置（可用预设体验）";
+  updateFirstRun();
 }
 function showLoading(msg) {
   var old = document.getElementById("loadingOverlay");
@@ -363,15 +387,23 @@ function showLoading(msg) {
 }
 function hideLoading() { var d = document.getElementById("loadingOverlay"); if (d) d.remove(); }
 
+// API 入口：本地开发走 Node 代理；静态托管（GitHub Pages 等）浏览器直连 DeepSeek
+// 依据：实测 DeepSeek /chat/completions 的 CORS 预检返回 200 且反射 Origin，官方支持浏览器直连
+var API_ENDPOINT = (function () {
+  var h = (location.hostname || "").toLowerCase();
+  if (h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]") return "/api/chat";
+  return "https://api.deepseek.com/chat/completions";
+})();
+
 async function callLLM(userPrompt, systemPrompt) {
   var key = localStorage.getItem("dsApiKey");
   if (!key) return null;
   try {
-    var resp = await fetch("/api/chat", {
+    var resp = await fetch(API_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
       body: JSON.stringify({
-        model: "deepseek-v4-flash",
+        model: "deepseek-flash",
         messages: [
           { role: "system", content: systemPrompt || "你是英语写作教练，用中文回答，简洁清晰。" },
           { role: "user", content: userPrompt }
@@ -383,8 +415,9 @@ async function callLLM(userPrompt, systemPrompt) {
     var data = await resp.json();
     return data.choices[0].message.content;
   } catch(e) {
-    if (e.message && e.message.indexOf("Failed to fetch") >= 0) {
-      return "ERROR: 需要本地代理。请运行 proxy-server.js（node proxy-server.js），然后通过 http://localhost:8768/ 访问 demo（不要直接打开文件或用其他服务器）。";
+    var em = String((e && e.message) || e);
+    if (/fetch|network|load failed/i.test(em)) {
+      return "ERROR: 无法连接 DeepSeek API。请检查：1) 网络是否通畅 2) Key 是否正确 3) 若用 file:// 直接打开，请改用在线版或 http://localhost:8768/ 。";
     }
     return "ERROR: " + e.message;
   }
@@ -869,6 +902,8 @@ updateApiStatus();
 renderLib();
 renderTopicImages();
 setupVoiceButtons();
+var frCloseBtn = document.getElementById("frClose");
+if (frCloseBtn) frCloseBtn.onclick = function () { localStorage.setItem("writingCoachTipClosed", "1"); updateFirstRun(); };
 // 作文草稿自动保存（防刷新丢失）
 document.getElementById("essayInput").value = localStorage.getItem("writingCoachDraft") || "";
 var draftTimer = null;
