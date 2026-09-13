@@ -11,6 +11,7 @@
 - 方案（闭环）：入库=句子+问题交给 AI，按 8 段教学结构讲解，存入个人知识库；出库=写作文 AI 检查语法+扫描句式，用对→入「已掌握」，用错→入「纠错」；对标=每条表达标 5/6/7 分（对应雅思 GRA 能力段），按目标分数过滤
 - 我的角色：独立完成需求→设计→开发→测试→打包（产品设计+全栈实现）
 - 成果：单文件应用开箱即用，localStorage 数据自持、隐私安全；修复 XSS/数据丢失等 20+ 问题，git 版本化管理，GitHub 开源
+- 已上线：https://kafuka046-art.github.io/writing-coach/ （GitHub Pages，**零后端**，访客自备 Key）→ 面试官当场可打开
 
 ## 2. 为什么做（动机）
 - 真实痛点：自己和身边人背了模板句/高分表达，写的时候用不出来
@@ -24,10 +25,12 @@
 | 雅思 5/6/7 对标 | 让 AI 评价可解释、可行动：知道差在哪级、该练什么 | 能力段是简化模型，不替代官方评分 |
 | localStorage 自持 | 零部署、离线可用、Key 不外传 | 单设备不同步——MVP 先验证需求 |
 | 单文件纯前端 | 可打包、双击可演示、无依赖 | 上多端/多人需重构 |
-| Node 本地代理 | 解决浏览器 CORS，Key 只存本机 | 需本机 Node（后续可换服务端） |
+| 线上浏览器直连 API | 实测 DeepSeek 官方支持 CORS（预检 200 + 反射 Origin），静态托管直接调用，**零后端零成本** | 访客需自备 Key；若要给陌生人免费用，必须上服务端（成本 + 被刷风险 + 备案） |
 
 ## 4. 技术实现问答
-- 架构：单文件 HTML+CSS+JS（无框架）；Node http 本地代理转发 DeepSeek（OpenAI 兼容接口）
+- 架构：单文件 HTML+CSS+JS（无框架、无构建）；模型 deepseek-flash（DeepSeek-V4.1-Flash）
+- 调用路径：本地开发走 Node 代理 `/api/chat`；线上静态托管时浏览器**直连** `api.deepseek.com/chat/completions`（代码里 `API_ENDPOINT` 按 hostname 自动判断）
+- 部署：GitHub Pages（main 分支根目录 + .nojekyll），访问 https://kafuka046-art.github.io/writing-coach/
 - 安全：XSS（动态内容全转义、事件委托删条目、JSON 导入消毒）；代理只绑 127.0.0.1 + Host 校验（防 DNS rebinding）+ 请求体 2MB 限制 + 路径穿越防护
 - 数据模型：知识库条目=句子/问题/AI讲解/等级/来源/时间/掌握状态；回流=更新条目状态
 - 等级判定：AI 输出解析容错（"等级：X分"正则容忍多种写法，失败回退默认值）
@@ -41,9 +44,12 @@
 - Q6 20+ 问题具体指？ → XSS 注入、JSON 导入未消毒崩溃、清库后预设复活、等级解析失败、"in"误匹配"interesting" 等边界；git 可查
 - Q7 一个人做，时间怎么安排？ → 需求设计→开发→修 bug→文档打包，迭代式；GitHub 提交记录可见演进
 - Q8 和 Grammarly 等区别？ → 它们做"检查"，我做"学习闭环沉淀"；对标雅思给练习方向
+- Q9 为什么不做后端？ → 实测 DeepSeek API 原生支持 CORS，静态托管即可直连，省掉服务器成本和运维；访客 Key 只存自己浏览器，我这边零数据、零合规风险。要做成"零门槛给陌生人用"才必须加服务端（Key 托管 + 限流 + 预算熔断 + 备案考量）——这是有意的取舍，不是没想到
+- Q10 这个项目的坑？ → 我一开始假设 API 不支持浏览器跨域，写了 Node 代理绕 CORS；后来实测预检返回 200 并反射 Origin，证明假设是错的，于是线上改成直连、代理只留作本地开发——**先验证假设再写代码**是这次最大的教训
 
 ## 6. 可自证事实清单
-- GitHub 仓库 4 个提交、README 完整
+- **在线可用**：https://kafuka046-art.github.io/writing-coach/（HTTP 200 已验证）
+- GitHub 仓库有提交历史、README 完整
 - 本地 `node proxy-server.js` → http://localhost:8768/ 可跑（已验证）
 - 内置 5/6/7 分预设例句库（PRESETS），无 Key 也能演示
 - localStorage 4 键：dsApiKey / writingCoachDraft / writingCoachLib4 / writingCoachTarget
