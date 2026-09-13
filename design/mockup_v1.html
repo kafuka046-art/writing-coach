@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Writing Coach · 设计方案 v1 样稿（仅供评审）</title>
+<style>
+  :root{
+    --bg:#F6F6F3; --card:#FFFFFF; --ink:#1E2320; --ink2:#565C55; --ink3:#878D86;
+    --line:#E7E6E1; --line2:#D5D4CE;
+    --brand:#1E6F5C; --brand-soft:#E8F3EF; --brand-line:#9FD3C4;
+    --warn:#8A5A00; --warn-soft:#FBF0DA;
+    --danger:#A33A2A; --danger-soft:#FBEAE6;
+    --info:#2C5AA0; --info-soft:#E9F0FA;
+    --purple:#5B4FA8; --purple-soft:#EEEDFB;
+    --r:14px; --rs:10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .note{max-width:760px;margin:16px auto 0;padding:10px 16px;background:#FFF8E5;border:1px solid #EFD9A0;
+        border-radius:var(--rs);font-size:12.5px;color:#6B5300}
+  .topbar{position:sticky;top:0;z-index:20;background:rgba(246,246,243,.92);backdrop-filter:blur(8px);
+          border-bottom:1px solid var(--line)}
+  .topbar-in{max-width:760px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .brand{font-size:15px;font-weight:650;letter-spacing:.2px}
+  .brand small{display:block;font-weight:400;font-size:11.5px;color:var(--ink3);letter-spacing:0}
+  .chips{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-size:12px;padding:3px 9px;border-radius:999px;background:#fff;border:1px solid var(--line2);color:var(--ink2)}
+  .chip.ok{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand);font-weight:550}
+  .nav{max-width:760px;margin:14px auto 0;padding:0 16px;display:flex;gap:4px}
+  .nav button{font:inherit;font-size:13.5px;padding:8px 14px;border-radius:999px;border:1px solid transparent;
+              background:transparent;color:var(--ink2);cursor:pointer}
+  .nav button.on{background:#fff;border-color:var(--line2);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .wrap{max-width:760px;margin:0 auto;padding:16px 16px 96px}
+  .step{margin-bottom:18px}
+  .step-head{display:flex;align-items:center;gap:9px;margin:0 4px 9px}
+  .num{width:23px;height:23px;border-radius:50%;background:var(--ink);color:#fff;font-size:12px;font-weight:650;
+       display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .step-head h2{font-size:16px;font-weight:640}
+  .step-head .hint{margin-left:auto;font-size:12px;color:var(--ink3)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;
+        box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card + .card{margin-top:10px}
+  textarea,input[type=text]{width:100%;font:inherit;font-size:14.5px;color:var(--ink);background:#FCFCFA;
+        border:1px solid var(--line2);border-radius:var(--rs);padding:11px 12px;resize:vertical}
+  textarea:focus,input:focus{outline:2px solid var(--brand-line);outline-offset:1px;border-color:var(--brand)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .row.mt{margin-top:10px}
+  .btn{font:inherit;font-size:14px;font-weight:600;padding:10px 18px;border-radius:var(--rs);border:1px solid transparent;
+       background:var(--brand);color:#fff;cursor:pointer;min-height:42px}
+  .btn.ghost{background:#fff;border-color:var(--line2);color:var(--ink);font-weight:500}
+  .btn.sm{font-size:12.5px;padding:6px 12px;min-height:34px;font-weight:500}
+  .btn.block{width:100%}
+  .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .quick span{font-size:12.5px;padding:5px 10px;border-radius:999px;background:#F1F1ED;color:var(--ink2);cursor:pointer}
+  .quick span:hover{background:var(--brand-soft);color:var(--brand)}
+  .lbl{font-size:12px;color:var(--ink3);margin-bottom:6px}
+  .explain{background:linear-gradient(180deg,#FBFDFC,#F7FBF9);border:1px solid var(--brand-line)}
+  .explain .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--brand);
+        background:#fff;border:1px solid var(--brand-line);border-radius:999px;padding:2px 10px}
+  .explain h3{font-size:15.5px;margin:11px 0 6px}
+  .explain p{font-size:14.5px;color:var(--ink2)}
+  .explain p b{color:var(--ink)}
+  .formula{display:block;margin:8px 0;padding:9px 11px;background:#fff;border:1px dashed var(--line2);border-radius:var(--rs);
+        font-size:13.5px;color:var(--ink);overflow-x:auto;white-space:nowrap}
+  .cmp{display:grid;gap:7px;margin-top:8px}
+  .cmp div{font-size:13.5px;padding:8px 11px;border-radius:var(--rs);background:#fff;border:1px solid var(--line)}
+  .cmp .good{border-left:3px solid var(--brand)}
+  .cmp .bad{border-left:3px solid var(--danger)}
+  .cmp em{font-style:normal;color:var(--ink3);font-size:12.5px}
+  .lv{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}
+  .lv.l6{background:var(--info-soft);color:var(--info)}
+  .lv.l7{background:var(--warn-soft);color:var(--warn)}
+  .lv.l5{background:#F1F1ED;color:var(--ink2)}
+  .turn{margin-top:14px;padding:13px;background:#fff;border:1px solid var(--brand-line);border-radius:var(--rs)}
+  .turn .t{font-size:13.5px;font-weight:600;color:var(--brand);margin-bottom:7px}
+  .topic{margin-bottom:12px;padding:12px;border:1px dashed var(--line2);border-radius:var(--rs);background:#FCFCFA}
+  .thumb{position:relative;display:inline-block;margin-top:8px}
+  .thumb .ph{width:132px;height:94px;border-radius:8px;border:1px solid var(--line2);background:
+      repeating-linear-gradient(135deg,#EFEFEA,#EFEFEA 8px,#F7F7F3 8px,#F7F7F3 16px);
+      display:flex;align-items:center;justify-content:center;font-size:11.5px;color:var(--ink3)}
+  .thumb .x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;background:var(--ink);
+      color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .fb{background:#fff}
+  .fb .fb-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .fb .fb-head h3{font-size:15px;font-weight:640}
+  .fb .fb-head .kind{font-size:11.5px;color:var(--ink3);border:1px solid var(--line2);border-radius:999px;padding:1px 8px}
+  .blocks{display:grid;gap:9px}
+  .blk{border-radius:var(--rs);padding:11px 13px;font-size:14px;border:1px solid}
+  .blk .bt{font-size:12.5px;font-weight:650;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+  .blk.p{background:var(--purple-soft);border-color:#D3D0F2;color:#3B3480}
+  .blk.g{background:var(--brand-soft);border-color:var(--brand-line);color:#14513F}
+  .blk.w{background:var(--warn-soft);border-color:#EBD49B;color:#6E4A00}
+  .blk.d{background:var(--danger-soft);border-color:#F0CFC7;color:#7E2C20}
+  .blk .body{color:var(--ink2);font-size:13.5px}
+  .libf{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px}
+  .libf span{font-size:12.5px;padding:5px 11px;border-radius:999px;background:#fff;border:1px solid var(--line2);color:var(--ink2);cursor:pointer}
+  .libf span.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .item{background:#fff;border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:var(--rs);
+        padding:12px 13px;font-size:14px}
+  .item + .item{margin-top:9px}
+  .item.fix{border-left-color:var(--danger)}
+  .item.lp{border-left-color:var(--purple)}
+  .item .sent{color:var(--ink);margin-bottom:5px}
+  .item .meta{font-size:12px;color:var(--ink3);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .empty{text-align:center;padding:26px 16px;color:var(--ink3);font-size:13.5px;background:#fff;border:1px dashed var(--line2);border-radius:var(--rs)}
+  .setting{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .setting:last-child{border-bottom:0}
+  .setting .k{color:var(--ink2)}
+  .setting .v{margin-left:auto;color:var(--ink3);font-size:13px}
+  .dock{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+        background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;gap:10px}
+  .dock .btn{flex:1}
+  .sec-title{max-width:760px;margin:34px auto 0;padding:0 16px;font-size:13px;font-weight:650;color:var(--ink3);
+        letter-spacing:.06em;text-transform:uppercase}
+  .cmp2{max-width:760px;margin:0 auto;padding:0 16px;display:grid;gap:12px}
+  .oldnew{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:16px}
+  .oldnew h4{font-size:14px;margin-bottom:8px}
+  .oldnew.old h4{color:var(--ink3)}
+  .oldnew.new h4{color:var(--brand)}
+  .oldnew ul{margin-left:18px;font-size:13.5px;color:var(--ink2)}
+  .oldnew li{margin-bottom:4px}
+  @media (min-width:900px){
+    .wrap,.topbar-in,.nav,.sec-title,.cmp2,.note{max-width:920px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+    .dock{max-width:920px;left:50%;transform:translateX(-50%);border-radius:14px 14px 0 0;border:1px solid var(--line);border-bottom:0}
+  }
+</style>
+</head>
+<body>
+
+<div class="note">
+  <b>这是设计样稿，不是能用的应用。</b>按钮点不动、不连 API。目的只有一个：让你在动代码前先看清新版长什么样，确认方向再实施。
+</div>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">Writing Coach<small>AI 英语写作教练</small></div>
+    <div class="chips">
+      <span class="chip">今日 3 条</span>
+      <span class="chip">目标 6.5</span>
+      <span class="chip ok">AI 已启用</span>
+    </div>
+  </div>
+</header>
+
+<nav class="nav">
+  <button class="on">学习</button>
+  <button>知识库</button>
+  <button>设置</button>
+</nav>
+
+<div class="wrap">
+
+  <!-- 步骤 1 -->
+  <section class="step">
+    <div class="step-head"><span class="num">1</span><h2>学一个表达</h2><span class="hint">贴句子或直接提问</span></div>
+    <div class="card">
+      <textarea rows="3">I am interested in the surprising result.</textarea>
+      <div class="quick">
+        <span>为什么用 interested 不用 interesting？</span>
+        <span>both 为什么在动词后面？</span>
+        <span>这里为什么用 the？</span>
+      </div>
+      <div class="row mt">
+        <button class="btn">让 AI 讲给我听</button>
+        <button class="btn ghost">🎤 说一句</button>
+      </div>
+    </div>
+
+    <!-- 讲解结果：新格式 -->
+    <div class="card explain">
+      <span class="tag">AI 讲解 · 已入库</span>
+      <h3>一句话答案</h3>
+      <p><b>both</b> 在这里不是副词。它和 <b>and</b> 组成固定搭配 <b>both...and...</b>，管的是后面的两个名词，
+         所以位置跟着<b>宾语</b>走，不跟动词走。</p>
+
+      <h3>为什么</h3>
+      <span class="formula">It is evident that + 主语 + 及物动词 + both + 名词A + and + 名词B</span>
+      <p>拆开看内嵌小句：<b>urbanization</b>（主语）+ <b>brings</b>（谓语）+ <b>both opportunities and challenges</b>（宾语）。
+         英语基本语序是「主 + 谓 + 宾」，宾语在动词后面，所以 both 也在动词后面。</p>
+
+      <h3>一组对比</h3>
+      <div class="cmp">
+        <div class="good">✅ They <b>both</b> bring opportunities.<br><em>both 指主语 They → 放实义动词前</em></div>
+        <div class="good">✅ They bring <b>both</b> opportunities and challenges.<br><em>both 指宾语 → 放动词后</em></div>
+        <div class="bad">❌ It is evident that urbanization <b>both</b> brings opportunities and challenges.<br><em>both 挡住了主语和谓语，且没形成平行结构</em></div>
+      </div>
+
+      <p style="margin-top:12px">该句式：<span class="lv l6">6 分 · 能复杂句</span></p>
+
+      <div class="turn">
+        <div class="t">现在轮到你了（10 秒）</div>
+        <div class="lbl">用 both...and... 写一句关于「在线学习」的话</div>
+        <input type="text" placeholder="Online learning brings both ... and ...">
+        <div class="row mt"><button class="btn sm">让 AI 判一下</button><span class="hint" style="font-size:12px;color:var(--ink3)">判对错 → 用对自动进「已掌握」，用错进「纠错」</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 步骤 2 -->
+  <section class="step">
+    <div class="step-head"><span class="num">2</span><h2>写作文</h2><span class="hint">有题目就贴题目</span></div>
+    <div class="card">
+      <div class="topic">
+        <div class="lbl">作文题目（可选）</div>
+        <div style="font-size:13.5px;color:var(--ink2)">Ctrl+V 粘贴题目截图，或
+          <span style="color:var(--brand);text-decoration:underline">上传图片</span>
+          <span style="color:var(--ink3)">· 填了 Key 会随作文一起发给 AI，判断你有没有跑题</span></div>
+        <div class="thumb"><div class="ph">题目截图</div><div class="x">×</div></div>
+      </div>
+      <textarea rows="8" placeholder="在这里写作文……（自动保存，刷新不丢）">The chart shows the changes in urban population from 2000 to 2020. It is evident that the population grew steadily. Not only did the urban population increase, but also the rural population declined.</textarea>
+      <div class="row mt">
+        <button class="btn">检查并自动入库</button>
+        <button class="btn ghost">填示例作文</button>
+        <span class="hint" style="font-size:12px;color:var(--ink3);margin-left:auto">68 词 · 建议 ≥250</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 步骤 3 -->
+  <section class="step">
+    <div class="step-head"><span class="num">3</span><h2>看反馈</h2><span class="hint">按重要性排序</span></div>
+    <div class="card fb">
+      <div class="fb-head"><h3>本次检查</h3><span class="kind">AI 读图 + 语法</span></div>
+      <div class="blocks">
+        <div class="blk p">
+          <div class="bt">📄 题目理解（AI 读图）</div>
+          <div class="body">雅思 Task 2 讨论题：需 ≥250 词，讨论双方观点并给出自己的立场。</div>
+        </div>
+        <div class="blk g">
+          <div class="bt">🎯 切题判断</div>
+          <div class="body">基本切题，写了双方现象，但缺少「对立观点的反驳」和明确立场句。</div>
+        </div>
+        <div class="blk w">
+          <div class="bt">✍️ 句式提醒 · 用对 1 · 建议加 1</div>
+          <div class="body">用对了 <b>not only...but also</b>（7 分）；可考虑加 <b>which suggests that</b>（6 分）来引出推论。</div>
+        </div>
+        <div class="blk d">
+          <div class="bt">🔍 语法与表达 · 2 条</div>
+          <div class="body">① 句末缺标点 → 加句号；② <b>over the period</b> 位置建议放句首。</div>
+        </div>
+      </div>
+      <div class="row mt">
+        <button class="btn sm">已自动入库 1 条已掌握 / 1 条纠错</button>
+        <button class="btn ghost sm">再看一遍</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="sec-title">其他页面示意</div>
+
+<div class="cmp2" style="margin-top:12px">
+  <!-- 知识库页 -->
+  <div class="card">
+    <div class="fb-head" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <h3 style="font-size:15px">我的知识库</h3><span class="kind" style="font-size:11.5px;color:var(--ink3)">共 3 条</span>
+    </div>
+    <div class="libf">
+      <span class="on">全部 3</span><span>已掌握 0</span><span>纠错 1</span><span>语言点 1</span><span>句式 1</span>
+    </div>
+    <div class="item">
+      <div class="sent">"It is evident that urbanization brings both opportunities and challenges."</div>
+      <div class="meta"><b>both...and...</b><span class="lv l6">6 分</span><span>你问的：both 为什么在动词后面</span></div>
+    </div>
+    <div class="item fix">
+      <div class="sent">"This change reflects policy adjustments"</div>
+      <div class="meta"><b>句末标点</b><span class="lv l5">5 分</span><span>写作纠错 · 待复现</span></div>
+    </div>
+    <div class="item lp">
+      <div class="sent">"I am interested in the surprising result."</div>
+      <div class="meta"><b>-ed / -ing 形容词</b><span class="lv l5">5 分</span><span>AI 解释</span></div>
+    </div>
+    <div class="row mt"><button class="btn ghost sm">导出备份</button><button class="btn ghost sm">导入</button></div>
+  </div>
+
+  <!-- 设置页 -->
+  <div class="card">
+    <div class="fb-head" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <h3 style="font-size:15px">设置</h3>
+    </div>
+    <div class="setting"><span class="k">DeepSeek API Key</span><span class="v">已配置 · sk-****1234</span></div>
+    <div class="setting"><span class="k">目标分数</span><span class="v">6.5</span></div>
+    <div class="setting"><span class="k">语音语言</span><span class="v">中文 / English</span></div>
+    <div class="setting"><span class="k">数据</span><span class="v">导出 · 导入 · 清空</span></div>
+    <div class="setting"><span class="k">隐私</span><span class="v">Key 与知识库只存本机</span></div>
+    <div class="setting"><span class="k">关于</span><span class="v">v1.1 · GitHub</span></div>
+  </div>
+</div>
+
+<div class="sec-title">AI 讲解：改造前后对比</div>
+<div class="cmp2" style="margin-top:12px;padding-bottom:40px">
+  <div class="oldnew old">
+    <h4>现在（固定 8 段 · 约 1500 字）</h4>
+    <ul>
+      <li>1 核心规则 → 2 原句 → 3 原理拆解 → 4 复原语序 → 5 混淆对比 → 6 补充细节 → 7 仿写 → 8 总结</li>
+      <li>同一个结论（"both 不是副词"）在 4 个段落里重复出现</li>
+      <li>第 4 段明说"本句没有发生倒装"，仍然写了一整段</li>
+      <li>学生读完 1500 字，得到 3 句话的知识</li>
+    </ul>
+  </div>
+  <div class="oldnew new">
+    <h4>改造后（自适应 3-6 段 · 约 300 字）</h4>
+    <ul>
+      <li>先判类型：词性/搭配类 → 3 段；结构/语序类 → 最多 6 段</li>
+      <li>硬约束：每个事实只说一次；不涉及语序就不写"还原语序"</li>
+      <li>术语统一，第一次出现给中文解释</li>
+      <li>结尾强制一个「现在轮到你了」仿写任务 → 当场判定对错 → 自动回流知识库</li>
+    </ul>
+  </div>
+</div>
+
+<div class="dock">
+  <button class="btn ghost">🎤 语音</button>
+  <button class="btn">检查我的作文</button>
+</div>
+
+</body>
+</html>
