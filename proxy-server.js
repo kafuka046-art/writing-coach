@@ -10,7 +10,7 @@ const path = require('path');
 const PORT = 8768;
 // 使用 __dirname 而不是 cwd()：无论从哪个目录启动都能正确找到 demo 文件
 const ROOT = path.resolve(__dirname);
-const MAX_BODY_BYTES = 2 * 1024 * 1024; // 请求体上限 2MB
+const MAX_BODY_BYTES = 12 * 1024 * 1024; // 请求体上限 12MB（题目图片以 base64 随请求体发送；DeepSeek 侧上限 48MiB）
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -60,7 +60,7 @@ const server = http.createServer(async (req, res) => {
       if (body.length > MAX_BODY_BYTES && !tooLarge) {
         tooLarge = true;
         res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: { message: 'Request body too large (max 2MB)' } }));
+        res.end(JSON.stringify({ error: { message: 'Request body too large (max ' + Math.round(MAX_BODY_BYTES / 1048576) + 'MB)' } }));
         req.destroy();
       }
     });

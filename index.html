@@ -106,6 +106,8 @@
   .result-item.fix { background: var(--amber-soft); border: 1px solid #fac775; }
   .result-item.suggest { background: var(--coral-soft); border: 1px solid #f5c4b3; }
   .result-item.grammar { background: var(--red-soft); border: 1px solid var(--red-border); }
+  .result-item.topic { background: var(--purple-soft); border: 1px solid #cecbf6; }
+  .result-item.topic .desc { color: var(--purple); }
   .result-item .type { font-weight: 500; margin-bottom: 2px; }
   .result-item.good .type { color: var(--green); }
   .result-item.fix .type { color: var(--amber); }
@@ -250,7 +252,7 @@
   <section class="panel">
     <h2>出库 <span class="tag">写作 → AI 检查 + 自动入库</span></h2>
     <div class="topic-area" id="topicArea">
-      <div class="t-hint" id="topicHint">题目图片：Ctrl+V 粘贴，或 <a href="#" onclick="uploadImg();return false;" style="color:var(--blue)">上传图片</a></div>
+      <div class="t-hint" id="topicHint">作文题目：Ctrl+V 粘贴截图，或 <a href="#" onclick="uploadImg();return false;" style="color:var(--blue)">上传图片</a>（填了 Key 会随作文一起发给 AI 判断切题）</div>
       <div class="topic-images" id="topicImages"></div>
     </div>
     <textarea id="essayInput" rows="9" placeholder="写作文。AI 检查语法+表达，用对入库「已掌握」，用错入库「纠错」。"></textarea>
@@ -395,7 +397,17 @@ var API_ENDPOINT = (function () {
   return "https://api.deepseek.com/chat/completions";
 })();
 
-async function callLLM(userPrompt, systemPrompt) {
+// 多模态 content：有图片时用 content 数组（DeepSeek-V4.1-Flash 原生支持 image_url）
+function buildUserContent(text, images) {
+  if (!images || !images.length) return text;
+  var parts = [{ type: "text", text: text }];
+  for (var i = 0; i < images.length; i++) {
+    parts.push({ type: "image_url", image_url: { url: images[i] } });
+  }
+  return parts;
+}
+
+async function callLLM(userPrompt, systemPrompt, images) {
   var key = localStorage.getItem("dsApiKey");
   if (!key) return null;
   try {
@@ -406,7 +418,7 @@ async function callLLM(userPrompt, systemPrompt) {
         model: "deepseek-flash",
         messages: [
           { role: "system", content: systemPrompt || "你是英语写作教练，用中文回答，简洁清晰。" },
-          { role: "user", content: userPrompt }
+          { role: "user", content: buildUserContent(userPrompt, images) }
         ],
         stream: false
       })
@@ -753,7 +765,29 @@ function uploadImg() {
   input.onchange = function(e) { var file = e.target.files[0]; if (!file) return; var reader = new FileReader(); reader.onload = function(ev) { addTopicImage(ev.target.result); }; reader.readAsDataURL(file); };
   input.click();
 }
-function addTopicImage(dataUrl) { topicImages.push(dataUrl); renderTopicImages(); }
+// 题目图片：压缩后再展示/发送，避免几 MB 原图撑爆请求体、拖慢速度、抬高 API 费用
+// DeepSeek 支持 JPEG/PNG/GIF/WebP；压到最长边 ≤1440px + JPEG 0.85，题目文字仍清晰可读
+function downscaleImage(dataUrl, cb) {
+  var img = new Image();
+  img.onload = function () {
+    try {
+      var maxDim = 1440, scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      if (scale === 1 && dataUrl.length < 300000) { cb(dataUrl); return; }
+      var c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
+      var ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); // PNG 透明底转 JPEG 会发黑，先铺白
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      cb(c.toDataURL("image/jpeg", 0.85));
+    } catch (e) { cb(dataUrl); }
+  };
+  img.onerror = function () { cb(dataUrl); };
+  img.src = dataUrl;
+}
+function addTopicImage(dataUrl) {
+  downscaleImage(dataUrl, function (small) { topicImages.push(small); renderTopicImages(); });
+}
 function renderTopicImages() {
   var box = document.getElementById("topicImages");
   var hint = document.getElementById("topicHint");
@@ -824,13 +858,33 @@ async function check() {
 
   var grammarIssues;
   var aiGrammarNote = "";
+  var topicNote = "";
+  var imageNote = "";
+  var basePrompt = "检查这篇英语作文的语法和表达问题。返回JSON数组，每个元素：{\"title\":\"问题类型\",\"desc\":\"具体描述（引用作文里的词）\",\"fix\":\"修正建议\",\"level\":\"5分或6分或7分\"}。只返回JSON数组，不要其他文字。\n\n作文：\n" + essay;
 
   if (hasApiKey()) {
-    showLoading("AI 检查语法和表达中...");
-    var prompt = "检查这篇英语作文的语法和表达问题。返回JSON数组，每个元素：{\"title\":\"问题类型\",\"desc\":\"具体描述（引用作文里的词）\",\"fix\":\"修正建议\",\"level\":\"5分或6分或7分\"}。只返回JSON数组，不要其他文字。\n\n作文：\n" + essay;
-    var llmResult = await callLLM(prompt, "你是英语写作教练，检查作文语法。只返回JSON数组。");
+    // 题目图片随作文一起发给多模态模型（最多最近 4 张，控制请求体大小）
+    var sentImages = topicImages.slice(-4);
+    if (topicImages.length > sentImages.length) imageNote += "（图片较多，仅发送最近 4 张）";
+    showLoading(sentImages.length ? "AI 读题目图片 + 检查作文中..." : "AI 检查语法和表达中...");
+    var prompt = sentImages.length
+      ? "我先上传了作文题目图片（1 张或多张）。请按顺序做三件事：\n1) 用不超过 80 字概括题目要求（任务类型 + 关键限制，如字数、写作对象、必须讨论的点）；\n2) 用不超过 80 字判断我的作文是否切题，指出跑题或遗漏的要点（完全切题就明确写「切题，无遗漏」）；\n3) 然后另起一行，输出 JSON 数组，检查作文语法与表达问题，每个元素：{\"title\":\"问题类型\",\"desc\":\"具体描述（引用作文里的词）\",\"fix\":\"修正建议\",\"level\":\"5分或6分或7分\"}。\n\n我的作文：\n" + essay
+      : basePrompt;
+    var sysPrompt = sentImages.length
+      ? "你是雅思写作教练。先读懂题目图片，再评估作文是否切题，最后用 JSON 数组列出语法与表达问题（JSON 数组部分只输出数组本身）。"
+      : "你是英语写作教练，检查作文语法。只返回JSON数组。";
+    var llmResult = await callLLM(prompt, sysPrompt, sentImages);
+    // 图片导致失败时降级为纯文本重试：宁可少一个功能，也不能整次检查失败
+    if (llmResult && llmResult.indexOf("ERROR") === 0 && sentImages.length) {
+      llmResult = await callLLM(basePrompt, "你是英语写作教练，检查作文语法。只返回JSON数组。", null);
+      if (llmResult && llmResult.indexOf("ERROR") !== 0) imageNote += "（图片未能识别，已降级为纯文本检查）";
+    }
     hideLoading();
     if (llmResult && llmResult.indexOf("ERROR") !== 0) {
+      if (sentImages.length) {
+        var jStart = llmResult.indexOf("[");
+        if (jStart > 0) topicNote = llmResult.slice(0, jStart).trim();
+      }
       var parsedIssues = extractJsonArray(llmResult);
       if (parsedIssues) {
         grammarIssues = parsedIssues.filter(function(x){ return x && typeof x === "object"; }).map(function(x){
@@ -879,6 +933,12 @@ async function check() {
   if (added.fix + added.master > 0) html += '<div class="auto-add-note">本次自动入库：<b>' + added.master + '</b> 条已掌握 + <span class="red">' + added.fix + '</span> 条纠错</div>';
   if (filteredOut > 0) html += '<div class="auto-add-note" style="color:var(--text-light)">已按目标 ' + targetScore + '+ 过滤 ' + filteredOut + ' 条低分表达</div>';
 
+  if (topicNote || imageNote) {
+    html += '<div class="result-section">题目理解与切题判断' + esc(imageNote) + "</div>";
+    html += topicNote
+      ? '<div class="result-item topic"><div class="desc" style="white-space:pre-wrap">' + esc(topicNote) + "</div></div>"
+      : '<div class="result-empty">未读回题目内容</div>';
+  }
   html += '<div class="result-section">语法检查 ' + aiGrammarNote + '（共 ' + grammarIssues.length + " 条）</div>";
   if (grammarIssues.length === 0) html += '<div class="result-empty">未发现明显语法问题</div>';
   else { for (var g of grammarIssues) { html += '<div class="result-item grammar"><div class="type">' + esc(g.title||"问题") + '</div><div class="desc">' + esc(g.desc||"") + '</div><div class="ex">修正：' + esc(g.fix||"") + '</div><div class="stored red">已自动入库 → 纠错</div></div>'; } }
